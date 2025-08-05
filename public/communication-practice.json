@@ -1,0 +1,74 @@
+{
+  "sets": [
+    {
+      "setName": "General Business Communication",
+      "reading": [
+        "The sun dipped below the horizon, painting the sky in shades of orange and purple. A gentle breeze rustled the leaves in the trees, creating a soft, whispering sound that seemed to tell stories of the day's end.",
+        "Effective project management requires a delicate balance of clear communication, meticulous planning, and the flexibility to adapt to unforeseen challenges. A successful project manager must be a leader, a motivator, and a problem-solver all at once.",
+        "The ancient library was a labyrinth of towering shelves, each one filled with books bound in leather and smelling of dust and time. Every volume held a different world, a different secret, waiting patiently to be discovered.",
+        "Artificial intelligence is rapidly transforming industries across the globe, from healthcare and finance to transportation and entertainment. Its potential to solve complex problems is immense, but it also raises important ethical questions that we must address as a society.",
+        "To achieve a state of flow, one must be fully immersed in an activity, feeling energized, focused, and enjoying the process. It's a state of deep concentration where productivity and creativity often peak, leading to a profound sense of accomplishment."
+      ],
+      "repetition": [
+        { "text": "The report is due next Friday.", "audioUrl": "/audio/report-due.mp3" },
+        { "text": "Can we reschedule the meeting?", "audioUrl": "/audio/reschedule-meeting.mp3" },
+        { "text": "What are the key performance indicators?", "audioUrl": "/audio/kpi.mp3" },
+        { "text": "Let's touch base tomorrow morning to review the project status.", "audioUrl": "/audio/touch-base.mp3" },
+        { "text": "Could you please send over the updated presentation slides?", "audioUrl": "/audio/updated-presentation.mp3" }
+      ],
+      "comprehension": [
+        {
+          "storyAudioUrl": "/audio/story_fantasy.mp3",
+          "questions": [
+            { "question": "What was Elara's profession?", "options": ["Blacksmith", "Librarian", "Baker", "Mayor"], "correctAnswer": "Librarian" },
+            { "question": "What was unique about the book she discovered?", "options": ["It had a golden cover", "It was written in an unknown language", "It whispered secrets to her", "It was completely empty"], "correctAnswer": "It whispered secrets to her" },
+            { "question": "What did the book reveal a map to?", "options": ["A hidden city", "A secret garden", "A lost treasure", "An ancient forest"], "correctAnswer": "A hidden city" }
+          ]
+        },
+        {
+          "storyAudioUrl": "/audio/story_email.mp3",
+          "questions": [
+            { "question": "What was the initial problem with Anjali's email?", "options": ["It lacked specific details", "It was sent to the wrong person", "It was too long and confusing", "It had several spelling mistakes"], "correctAnswer": "It lacked specific details" },
+            { "question": "What information did Anjali include in her second email?", "options": ["Her manager's contact number", "A screenshot of a different error", "The server's IP address and application name", "An apology for the inconvenience"], "correctAnswer": "The server's IP address and application name" },
+            { "question": "What does the acronym 'ASAP' stand for?", "options": ["All Systems Are Perfect", "Another Software Application Problem", "Always Submit After Proofreading", "As Soon As Possible"], "correctAnswer": "As Soon As Possible" }
+          ]
+        }
+      ]
+    },
+    {
+      "setName": "Professional Workplace Skills",
+      "reading": [
+        "The office buzzed with energy as employees collaborated in small groups, each contributing their unique skills to achieve a common goal. It was a testament to the power of teamwork and shared vision.",
+        "Time management is not just about working harder but working smarter. It involves prioritizing tasks, eliminating distractions, and dedicating focused blocks of time to what truly matters.",
+        "The old clock tower stood tall in the center of the city, its rhythmic chimes echoing through the streets. It was more than just a landmark; it was a reminder of the city's rich history and traditions.",
+        "Cybersecurity has become one of the most critical aspects of modern business operations. Protecting data from breaches requires a proactive approach, continuous monitoring, and educating employees about safe practices.",
+        "Critical thinking enables individuals to analyze information objectively, identify underlying assumptions, and make informed decisions. It is an essential skill for problem-solving in complex and dynamic environments."
+      ],
+      "repetition": [
+        { "text": "Please submit your timesheets by Monday.", "audioUrl": "/audio/timesheets.mp3" },
+        { "text": "Can we arrange a follow-up call?", "audioUrl": "/audio/follow-up-call.mp3" },
+        { "text": "What’s the deadline for this project?", "audioUrl": "/audio/project-deadline.mp3" },
+        { "text": "Let's finalize the agenda before the client meeting.", "audioUrl": "/audio/finalize-agenda.mp3" },
+        { "text": "Could you review the draft proposal and provide feedback?", "audioUrl": "/audio/draft-proposal.mp3" }
+      ],
+      "comprehension": [
+        {
+          "storyAudioUrl": "/audio/story_teamwork.mp3",
+          "questions": [
+            { "question": "What was the team's main goal?", "options": ["To organize a community event", "To deliver a successful client project", "To redesign the office space", "To conduct a training workshop"], "correctAnswer": "To deliver a successful client project" },
+            { "question": "What challenge did they face initially?", "options": ["Lack of resources", "Miscommunication among members", "Technical issues with software", "Delayed approvals"], "correctAnswer": "Miscommunication among members" },
+            { "question": "How did the team overcome the challenge?", "options": ["They worked longer hours", "They sought help from another team", "They established clear communication channels", "They outsourced the project"], "correctAnswer": "They established clear communication channels" }
+          ]
+        },
+        {
+          "storyAudioUrl": "/audio/story_presentation.mp3",
+          "questions": [
+            { "question": "What was Priya preparing for?", "options": ["An interview", "A client presentation", "A team outing", "A conference workshop"], "correctAnswer": "A client presentation" },
+            { "question": "What feedback did she receive from her manager?", "options": ["To make the slides more visually appealing", "To add more technical details", "To reduce the number of slides", "To change the presentation topic"], "correctAnswer": "To make the slides more visually appealing" },
+            { "question": "What tool did Priya use for her presentation?", "options": ["Google Docs", "Microsoft PowerPoint", "Canva", "Prezi"], "correctAnswer": "Microsoft PowerPoint" }
+          ]
+        }
+      ]
+    }
+  ]
+}

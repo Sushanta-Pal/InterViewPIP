@@ -1,55 +1,34 @@
-'use client';
+// 1. Create this file: app/feedback/[sessionId]/page.tsx
+// This is the SERVER component. It fetches data and handles routing logic.
 
-import Card from '../common/Card';
-import Button from '../common/Button';
-import Link from 'next/link';
+import { auth } from '@clerk/nextjs/server';
+import { getUserProfile } from '@/lib/userActions';
+import FeedbackClientPage from '@/components/feedback/FeedbackClientPage';
+import { notFound } from 'next/navigation';
 
-// Placeholder data
-const feedback = {
-  clarity: 85,
-  pace: 78,
-  fillerWords: 5,
-  sentiment: 'Positive',
-  suggestions: [
-    'Try to vary your pitch more to sound more engaging.',
-    'Good job on keeping filler words to a minimum!',
-    'Your pace was consistent and easy to follow.'
-  ]
+// Define the props type for the page, which comes from the folder name [sessionId]
+type FeedbackPageProps = {
+    params: { sessionId: string };
 };
 
-export default function FeedbackPage() {
-  return (
-    <Card>
-      <h1 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Session Feedback</h1>
-      <div className="space-y-6">
-        <div>
-          <h2 className="font-semibold text-lg text-gray-800 dark:text-gray-200">Clarity: <span className='text-blue-500'>{feedback.clarity}%</span></h2>
-          <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mt-2">
-            <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${feedback.clarity}%` }}></div>
-          </div>
-        </div>
-        <div>
-          <h2 className="font-semibold text-lg text-gray-800 dark:text-gray-200">Pace: <span className='text-green-500'>{feedback.pace} words/minute</span></h2>
-           <p className='text-sm text-gray-500 dark:text-gray-400'>(Ideal: 70-80 wpm)</p>
-        </div>
-        <div>
-          <h2 className="font-semibold text-lg text-gray-800 dark:text-gray-200">Filler Words: <span className='text-red-500'>{feedback.fillerWords}</span></h2>
-        </div>
-         <div>
-          <h2 className="font-semibold text-lg text-gray-800 dark:text-gray-200">Overall Sentiment: <span className='text-purple-500'>{feedback.sentiment}</span></h2>
-        </div>
-        <div>
-            <h2 className="font-semibold text-lg text-gray-800 dark:text-gray-200 mb-2">Suggestions for Improvement</h2>
-            <ul className='list-disc list-inside space-y-2 text-gray-600 dark:text-gray-400'>
-                {feedback.suggestions.map((s, i) => <li key={i}>{s}</li>)}
-            </ul>
-        </div>
-      </div>
-      <div className='mt-8 text-center'>
-        <Link href="/dashboard">
-            <Button>Back to Dashboard</Button>
-        </Link>
-      </div>
-    </Card>
-  );
+export default async function FeedbackPage({ params }: FeedbackPageProps) {
+    const { userId } = auth();
+    // If the user isn't logged in, Next.js will show a 404 page.
+    if (!userId) {
+        return notFound();
+    }
+
+    const { sessionId } = params;
+    const userProfile = await getUserProfile(userId);
+    
+    // Find the specific session from the user's history array
+    const sessionData = userProfile?.session_history?.find(s => s.id === sessionId) || null;
+
+    // If the session ID in the URL doesn't match any session for this user, show a 404 page.
+    if (!sessionData) {
+        return notFound();
+    }
+
+    // If data is found, render the client component and pass the session data to it as a prop.
+    return <FeedbackClientPage session={sessionData} />;
 }
