@@ -1,26 +1,28 @@
-'use client';
+// 1. Replace this code in: app/dashboard/page.tsx
+// This is the Server Component that handles authentication and data fetching.
 
-import { useUser } from '@clerk/nextjs';
-import Card from '../common/Card';
-import Button from '../common/Button';
-import Link from 'next/link';
+import { auth, currentUser } from '@clerk/nextjs/server';
+import { getUserProfile, createUserProfile } from '@/lib/userActions';
+import DashboardClientPage from '@/components/dashboard/DashboardClientPage';
+import { redirect } from 'next/navigation';
 
-export default function DashboardPage() {
-  const { user } = useUser();
+export default async function DashboardPage() {
+    const { userId } = auth();
+    const user = await currentUser();
 
-  return (
-    <div>
-      <h1 className="text-3xl font-bold mb-6 text-gray-900 dark:text-white">Welcome, {user?.firstName}!</h1>
-      <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">What would you like to work on today?</p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-           <Card className='hover:shadow-xl hover:-translate-y-1'>
-          <h2 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">Communication Practice</h2>
-          <p className="mb-4 text-gray-600 dark:text-gray-400">Practice your speaking skills with various exercises.</p>
-          <Link href="/communication-practice">
-            <Button>Start Practice</Button>
-          </Link>
-        </Card>
-      </div>
-    </div>
-  );
+    // If the user is not logged in, redirect them to the sign-in page.
+    if (!userId || !user) {
+        redirect('/sign-in');
+    }
+
+    // Attempt to fetch the user's profile from Supabase.
+    let userProfile = await getUserProfile(userId);
+
+    // If a profile doesn't exist, it's a new user. Create a profile for them.
+    if (!userProfile) {
+        userProfile = await createUserProfile(user);
+    }
+
+    // Render the client component and pass the user's profile data as a prop.
+    return <DashboardClientPage profile={userProfile} />;
 }

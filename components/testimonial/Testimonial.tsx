@@ -1,5 +1,7 @@
 import Image from 'next/image';
-import Card from '../common/Card';
+// Corrected import using curly braces for named exports
+import { Card } from '@/components/common/Card';
+import React from 'react';
 
 interface TestimonialProps {
   quote: string;
