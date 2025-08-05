@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import Card from '../common/Card';
+import {Card} from '@/components/common/Card';
 
 export default function ServiceSelectionPage() {
   return (
