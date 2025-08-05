@@ -1,6 +1,5 @@
-
-// 2. Create this new file: components/dashboard/DashboardClientPage.tsx
-// This is the Client Component that displays the data and handles user interaction.
+// 1. Replace this code in: components/dashboard/DashboardClientPage.tsx
+// This is the new, enhanced dashboard UI.
 
 'use client';
 
@@ -8,31 +7,51 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/common/Button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/common/Card';
-import { PlusCircle, History } from 'lucide-react';
+import { PlusCircle, History, TrendingUp, Target, BookOpen, Repeat, BrainCircuit } from 'lucide-react';
 import type { UserProfile } from '@/lib/userActions';
 
-// Define the props this component expects
-interface DashboardClientPageProps {
-    profile: UserProfile | null;
-}
+// Helper to determine score color for visual feedback
+const getScoreColor = (score: number | null | undefined): string => {
+    if (score === null || score === undefined) return 'text-slate-500';
+    if (score >= 85) return 'text-green-500';
+    if (score >= 60) return 'text-yellow-500';
+    return 'text-red-500';
+};
 
-export default function DashboardClientPage({ profile }: DashboardClientPageProps) {
+// A small component for the stat cards
+const StatCard = ({ title, value, icon, description }: { title: string, value: string | number, icon: React.ReactNode, description: string }) => (
+    <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{title}</CardTitle>
+            {icon}
+        </CardHeader>
+        <CardContent>
+            <div className="text-2xl font-bold">{value}</div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{description}</p>
+        </CardContent>
+    </Card>
+);
+
+export default function DashboardClientPage({ profile }: { profile: UserProfile | null }) {
     const router = useRouter();
 
-    // Function to handle clicking on a session to view its feedback
     const handleSessionClick = (sessionId: string) => {
         router.push(`/feedback/${sessionId}`);
     };
 
+    const overallScore = profile?.overall_average_score ?? 0;
+    const totalSessions = profile?.session_history?.length ?? 0;
+    const sortedHistory = profile?.session_history ? [...profile.session_history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [];
+
     return (
-        <div>
-            <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
+        <div className="space-y-8">
+            <div className="flex flex-wrap justify-between items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
                         Welcome, {profile?.username || 'User'}!
                     </h1>
                     <p className="text-lg text-gray-600 dark:text-gray-400 mt-1">
-                        What would you like to work on today?
+                        Here's your performance overview. Let's get practicing!
                     </p>
                 </div>
                 <Link href="/communication-practice">
@@ -42,6 +61,35 @@ export default function DashboardClientPage({ profile }: DashboardClientPageProp
                 </Link>
             </div>
 
+            {/* Stats Grid */}
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                <StatCard 
+                    title="Overall Average" 
+                    value={`${overallScore} / 100`}
+                    icon={<TrendingUp className="h-4 w-4 text-slate-500" />}
+                    description="Across all sessions"
+                />
+                <StatCard 
+                    title="Sessions Completed" 
+                    value={totalSessions}
+                    icon={<Target className="h-4 w-4 text-slate-500" />}
+                    description="Keep up the great work!"
+                />
+                 <StatCard 
+                    title="Avg. Reading Score" 
+                    value={profile?.average_reading_score ?? 'N/A'}
+                    icon={<BookOpen className="h-4 w-4 text-slate-500" />}
+                    description="Clarity and accuracy"
+                />
+                 <StatCard 
+                    title="Avg. Repetition Score" 
+                    value={profile?.average_repeating_score ?? 'N/A'}
+                    icon={<Repeat className="h-4 w-4 text-slate-500" />}
+                    description="Listening and recall"
+                />
+            </div>
+
+            {/* Session History Card */}
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center">
@@ -52,29 +100,28 @@ export default function DashboardClientPage({ profile }: DashboardClientPageProp
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {profile?.session_history && profile.session_history.length > 0 ? (
-                        <ul className="space-y-4">
-                            {/* Sort sessions by date, newest first */}
-                            {[...profile.session_history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((session) => (
-                                <li 
+                    {sortedHistory.length > 0 ? (
+                        <div className="space-y-4">
+                            {sortedHistory.map((session) => (
+                                <div 
                                     key={session.id} 
                                     onClick={() => handleSessionClick(session.id)}
-                                    className="p-4 border rounded-lg flex justify-between items-center hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+                                    className="p-4 border rounded-lg flex justify-between items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
                                 >
                                     <div>
                                         <p className="font-semibold text-lg">{session.type} Practice</p>
                                         <p className="text-sm text-slate-500 dark:text-slate-400">{session.date}</p>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="font-bold text-2xl text-blue-500">
+                                    <div className="text-right flex items-center gap-4">
+                                        <p className={`font-bold text-2xl ${getScoreColor(session.score)}`}>
                                             {session.score}
                                             <span className="text-base text-slate-400"> / 100</span>
                                         </p>
-                                        <p className="text-sm font-medium text-blue-600 dark:text-blue-400">View Report &rarr;</p>
+                                        <Button variant="ghost" size="sm">View Report</Button>
                                     </div>
-                                </li>
+                                </div>
                             ))}
-                        </ul>
+                        </div>
                     ) : (
                         <div className="text-center py-12 border-2 border-dashed rounded-lg">
                             <h3 className="text-xl font-semibold text-slate-700 dark:text-slate-300">No Sessions Yet</h3>
