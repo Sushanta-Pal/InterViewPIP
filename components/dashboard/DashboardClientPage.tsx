@@ -1,36 +1,32 @@
-// 1. Replace this code in: components/dashboard/DashboardClientPage.tsx
-// This is the new, enhanced dashboard UI.
 
-'use client';
+"use client"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import Button  from "@/components/common/Button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/common/Card"
+import {
+  PlusCircle,
+  TrendingUp,
+  Target,
+  BookOpen,
+  Repeat,
+  History,
+  Puzzle, // Added Puzzle Icon
+} from "lucide-react"
+import StatCard from "../common/StatCard"
+import { UserProfile } from "@/lib/types"
 
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import Button from '@/components/common/Button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/common/Card';
-import { PlusCircle, History, TrendingUp, Target, BookOpen, Repeat, BrainCircuit } from 'lucide-react';
-import type { UserProfile } from '@/lib/userActions';
-
-// Helper to determine score color for visual feedback
-const getScoreColor = (score: number | null | undefined): string => {
-    if (score === null || score === undefined) return 'text-slate-500';
-    if (score >= 85) return 'text-green-500';
-    if (score >= 60) return 'text-yellow-500';
+const getScoreColor = (score: number) => {
+    if (score >= 90) return 'text-green-500';
+    if (score >= 70) return 'text-yellow-500';
     return 'text-red-500';
 };
-
-// A small component for the stat cards
-const StatCard = ({ title, value, icon, description }: { title: string, value: string | number, icon: React.ReactNode, description: string }) => (
-    <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{title}</CardTitle>
-            {icon}
-        </CardHeader>
-        <CardContent>
-            <div className="text-2xl font-bold">{value}</div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{description}</p>
-        </CardContent>
-    </Card>
-);
 
 export default function DashboardClientPage({ profile }: { profile: UserProfile | null }) {
     const router = useRouter();
@@ -87,6 +83,12 @@ export default function DashboardClientPage({ profile }: { profile: UserProfile 
                     icon={<Repeat className="h-4 w-4 text-slate-500" />}
                     description="Listening and recall"
                 />
+                <StatCard
+                    title="Avg. Comprehension Score"
+                    value={profile?.average_comprehension_score ?? 'N/A'}
+                    icon={<Puzzle className="h-4 w-4 text-slate-500" />}
+                    description="Understanding and analysis"
+                />
             </div>
 
             {/* Session History Card */}
@@ -110,7 +112,7 @@ export default function DashboardClientPage({ profile }: { profile: UserProfile 
                                 >
                                     <div>
                                         <p className="font-semibold text-lg">{session.type} Practice</p>
-                                        <p className="text-sm text-slate-500 dark:text-slate-400">{session.date}</p>
+                                        <p className="text-sm text-slate-500 dark:text-slate-400">{new Date(session.date).toLocaleDateString()}</p>
                                     </div>
                                     <div className="text-right flex items-center gap-4">
                                         <p className={`font-bold text-2xl ${getScoreColor(session.score)}`}>

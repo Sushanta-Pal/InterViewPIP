@@ -10,7 +10,7 @@ import type { Session } from "@/lib/userActions";
 import Button from "@/components/common/Button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/common/Card";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
-import { Mic, Play, CheckCircle, XCircle, ArrowRight, Volume2, Award, BookOpen, Repeat, BrainCircuit, Expand, MicOff, AlertTriangle } from "lucide-react";
+import { Mic, Play, CheckCircle, XCircle, ArrowRight, Volume2, Award, BookOpen, Repeat, BrainCircuit, Expand, MicOff, AlertTriangle,Puzzle } from "lucide-react";
 
 // --- UI Components ---
 
@@ -373,7 +373,6 @@ function ComprehensionStage({ stories, onComplete }: { stories: any[], onComplet
     );
 }
 
-// --- Score Summary Stage (No changes needed here) ---
 function ScoreSummaryStage({ allResults, onComplete }: { allResults: any, onComplete: (analysis: any) => void }) {
   const [analysis, setAnalysis] = useState<any>(null);
   const [isPending, setIsPending] = useState(true);
@@ -419,15 +418,49 @@ function ScoreSummaryStage({ allResults, onComplete }: { allResults: any, onComp
 
   return (
       <Card className="max-w-3xl mx-auto text-center">
-          <CardHeader><Award className="mx-auto h-12 w-12 text-yellow-500" /><CardTitle className="mt-4">Practice Complete!</CardTitle><CardDescription>Here is your performance summary.</CardDescription></CardHeader>
+          <CardHeader>
+              <Award className="mx-auto h-12 w-12 text-yellow-500" />
+              <CardTitle className="mt-4">Practice Complete!</CardTitle>
+              <CardDescription>Here is your performance summary.</CardDescription>
+          </CardHeader>
           <CardContent>
               <p className="text-6xl font-bold text-blue-500">{analysis.scores.overall}<span className="text-3xl text-slate-400">/100</span></p>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+                  <Card>
+                      <CardHeader className="flex flex-row items-center justify-between pb-2">
+                          <CardTitle className="text-sm font-medium">Reading</CardTitle>
+                          <BookOpen className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                          <div className="text-2xl font-bold">{analysis.scores.reading}</div>
+                      </CardContent>
+                  </Card>
+                  <Card>
+                      <CardHeader className="flex flex-row items-center justify-between pb-2">
+                          <CardTitle className="text-sm font-medium">Repetition</CardTitle>
+                          <Repeat className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                          <div className="text-2xl font-bold">{analysis.scores.repetition}</div>
+                      </CardContent>
+                  </Card>
+                  <Card>
+                      <CardHeader className="flex flex-row items-center justify-between pb-2">
+                          <CardTitle className="text-sm font-medium">Comprehension</CardTitle>
+                          <Puzzle className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                          <div className="text-2xl font-bold">{analysis.scores.comprehension}</div>
+                      </CardContent>
+                  </Card>
+              </div>
+
               <Button size="lg" onClick={() => onComplete(analysis)} className="mt-8">View Detailed Report <ArrowRight className="ml-2" /></Button>
           </CardContent>
       </Card>
   );
 }
-
 // --- Progress Stepper (No changes needed here) ---
 const ProgressStepper = ({ currentStage }: { currentStage: string }) => {
   const stages = ["reading", "repetition", "comprehension", "scoreSummary"];
