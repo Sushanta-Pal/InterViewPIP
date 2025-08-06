@@ -6,7 +6,7 @@
 import { useRouter } from 'next/navigation';
 import Button from '@/components/common/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/common/Card';
-import type { Session } from '@/lib/userActions';
+import type { Session } from '@/lib/types';
 import { BookOpen, Repeat, BrainCircuit, TrendingUp } from 'lucide-react';
 
 // Helper to determine score color for visual feedback
