@@ -3,15 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node --max-old-space-size=4096 ./node_modules/next/dist/bin/next dev",
-    "build": "next build",
+    "dev": "next dev",
+    "build": "next build && tsc --project tsconfig.worker.json",
     "start": "next start",
-    "lint": "next lint"
-  },
+    "worker": "node dist/worker/index.js",
+    "dev:worker": "ts-node-dev --respawn worker/index.ts"
+},
   "dependencies": {
     "@clerk/nextjs": "^5.1.6",
     "@google/generative-ai": "^0.14.1",
     "@supabase/supabase-js": "^2.43.5",
+    "@vercel/blob": "^1.1.1",
+    "bullmq": "^5.56.9",
     "lucide-react": "^0.395.0",
     "next": "14.2.4",
     "next-themes": "^0.3.0",
