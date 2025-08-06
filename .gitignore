@@ -10,6 +10,7 @@
 !.yarn/releases
 !.yarn/versions
 /.history
+
 # testing
 /coverage
 
@@ -30,12 +31,14 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-.env*
 
+# environment files
+.env
+.env.*        # ignore all env files
+.env.local    # explicitly ignore .env.local
