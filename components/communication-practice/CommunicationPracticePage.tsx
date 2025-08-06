@@ -6,7 +6,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { addSessionToHistory } from "@/lib/userActions";
-import type { Session } from "@/lib/userActions";
+// This is the correct line
+import type { Session, UserProfile } from "@/lib/types"; // It's good practice to get all types from here
 import Button from "@/components/common/Button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/common/Card";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
