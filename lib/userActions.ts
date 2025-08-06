@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import type { User } from '@clerk/nextjs/server';
-
+import type { UserProfile, Session } from './types';
 // Define the structure of the feedback object
 export interface SessionFeedback {
     scores: {
@@ -12,26 +12,7 @@ export interface SessionFeedback {
     reportText: string;
 }
 
-// Define the structure of a single session
-export interface Session {
-  id: string;
-  date: string;
-  type: string;
-  score: number;
-  feedback: SessionFeedback;
-}
 
-// Define the structure of the entire user profile object stored in Supabase
-export interface UserProfile {
-  user_id: string;
-  email: string | undefined;
-  username: string | null;
-  session_history: Session[] | null;
-  average_reading_score: number | null;
-  average_repeating_score: number | null;
-  average_comprehension_score: number | null;
-  overall_average_score: number | null;
-}
 
 /**
  * Fetches a user's profile from the database.
