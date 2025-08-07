@@ -97,30 +97,3 @@ export async function addSessionToHistory(userId: string, newSession: Session) {
   }
   return data;
 }
-
-/**
- * NEW FUNCTION
- * Fetches a specific session result for a user.
- * This is used by the frontend to poll for the analysis result.
- * @param sessionId - The ID of the session (which is the BullMQ jobId).
- * @returns The session object if found, otherwise null.
- */
-export async function getSessionResult(sessionId: string): Promise<Session | null> {
-    // This function must run on the server, so we can use the server-side auth helper
-    const { auth } = await import('@clerk/nextjs/server');
-    const { userId } = auth();
-    if (!userId) {
-        console.error("getSessionResult error: User not authenticated.");
-        return null;
-    }
-
-    const userProfile = await getUserProfile(userId);
-    if (!userProfile || !userProfile.session_history) {
-        return null;
-    }
-
-    // Find the specific session within the user's history array
-    const session = userProfile.session_history.find(s => s.id === sessionId);
-
-    return session || null;
-}
