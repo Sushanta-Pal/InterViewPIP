@@ -3,7 +3,7 @@
 import { useTheme } from 'next-themes';
 import { FiSun, FiMoon } from 'react-icons/fi';
 import { useEffect, useState } from 'react';
-import Button from './Button';
+import {Button} from './Button';
 
 export default function ThemeToggle() {
   const [mounted, setMounted] = useState(false);

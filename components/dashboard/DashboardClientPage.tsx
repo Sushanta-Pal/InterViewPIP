@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 // UPDATED: Import the 'Variants' type from framer-motion
 import { motion, Variants } from "framer-motion"
-import  Button  from "@/components/common/Button"
+import  {Button}  from "@/components/common/Button"
 import {
     Card,
     CardContent,

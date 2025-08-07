@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { motion, Variants } from 'framer-motion';
-import  Button  from '@/components/common/Button';
+import  {Button}  from '@/components/common/Button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/common/Card';
 import { ArrowLeft, BookOpen, Repeat, BrainCircuit, Star, BarChart2 } from 'lucide-react';
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';

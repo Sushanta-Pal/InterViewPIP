@@ -13,9 +13,12 @@
     "@clerk/nextjs": "^5.1.6",
     "@google/generative-ai": "^0.14.1",
     "@radix-ui/react-progress": "^1.1.7",
+    "@radix-ui/react-slot": "^1.2.3",
     "@supabase/supabase-js": "^2.43.5",
     "@vercel/blob": "^1.1.1",
     "bullmq": "^5.56.9",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "framer-motion": "^12.23.12",
     "lucide-react": "^0.395.0",
     "next": "14.2.4",
@@ -23,7 +26,8 @@
     "react": "^18",
     "react-circular-progressbar": "^2.2.0",
     "react-dom": "^18",
-    "react-icons": "^5.5.0"
+    "react-icons": "^5.5.0",
+    "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.16",
