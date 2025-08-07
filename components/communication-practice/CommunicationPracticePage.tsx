@@ -1,5 +1,3 @@
-// components/communication-practice/CommunicationPracticePage.tsx
-
 'use client';
 
 import React, { useState, useEffect, useRef } from "react";
@@ -10,27 +8,29 @@ import type { Session } from "@/lib/types";
 import Button from "@/components/common/Button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/common/Card";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
-import { Mic, Play, CheckCircle, XCircle, ArrowRight, Volume2, Award, BookOpen, Repeat, Puzzle, Expand, MicOff, AlertTriangle } from "lucide-react";
+import { Mic, Play, CheckCircle, XCircle, ArrowRight, Volume2, Award, BookOpen, Repeat, Puzzle, Expand, MicOff, AlertTriangle, Send } from "lucide-react";
 
 // --- UI Components ---
 
 const WarningMessage = () => (
-  <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-md flex items-center" role="alert">
-    <AlertTriangle className="h-5 w-5 mr-3" />
-    <div>
-        <p className="font-bold">Proctored Session Active</p>
-        <p>Please remain in full-screen mode. Exiting will immediately end the session.</p>
+    <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-md flex items-center" role="alert">
+        <AlertTriangle className="h-5 w-5 mr-3" />
+        <div>
+            <p className="font-bold">Proctored Session Active</p>
+            <p>Please remain in full-screen mode. Exiting will immediately end the session.</p>
+        </div>
     </div>
-  </div>
 );
 
 // --- Progress Stepper Component ---
 const ProgressStepper = ({ currentStage }: { currentStage: string }) => {
-    const stages = ["reading", "repetition", "comprehension", "polling", "summary"];
+    // UPDATED: Added 'finished' stage to the stepper
+    const stages = ["reading", "repetition", "comprehension", "finished", "polling", "summary"];
     const stageLabels: { [key: string]: string } = {
         reading: "Reading",
         repetition: "Repetition",
         comprehension: "Comprehension",
+        finished: "Submit", // Label for the new submission stage
         polling: "Analyzing",
         summary: "Summary"
     };
@@ -38,7 +38,7 @@ const ProgressStepper = ({ currentStage }: { currentStage: string }) => {
 
     return (
         <div className="flex justify-center items-center space-x-2 md:space-x-4 mb-8">
-            {stages.slice(0, 4).map((stage, index) => (
+            {stages.slice(0, 5).map((stage, index) => ( // Display up to 'Analyzing'
                 <React.Fragment key={stage}>
                     <div className="flex flex-col items-center text-center">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${index <= currentIndex ? "bg-blue-600 text-white" : "bg-slate-200 dark:bg-slate-700"}`}>
@@ -52,6 +52,7 @@ const ProgressStepper = ({ currentStage }: { currentStage: string }) => {
         </div>
     );
 };
+
 
 // --- Stage 1: Reading Aloud ---
 function ReadingStage({ paragraphs, onComplete }: { paragraphs: string[], onComplete: (data: any[]) => void }) {
@@ -219,7 +220,7 @@ function ComprehensionStage({ stories, onComplete }: { stories: any[], onComplet
 
             if (isLastQuestionInStory) {
                 if (isLastStory) {
-                    onComplete(updatedResults);
+                    onComplete(updatedResults); // Complete the final stage
                 } else {
                     setCurrentStoryIndex(prev => prev + 1);
                     setCurrentQuestionIndex(0);
@@ -262,6 +263,33 @@ function ComprehensionStage({ stories, onComplete }: { stories: any[], onComplet
         </Card>
     );
 }
+
+// --- NEW Component: Submit for Analysis Stage ---
+function SubmitStage({ onSubmit, isSubmitting }: { onSubmit: () => void; isSubmitting: boolean; }) {
+    return (
+        <Card className="max-w-3xl mx-auto text-center shadow-xl">
+            <CardHeader>
+                <CardTitle>All Stages Complete!</CardTitle>
+                <CardDescription>You have completed all the exercises. Click the button below to submit your session for analysis.</CardDescription>
+            </CardHeader>
+            <CardContent className="py-12 flex flex-col items-center">
+                <Button size="lg" onClick={onSubmit} disabled={isSubmitting}>
+                    {isSubmitting ? (
+                        <>
+                            <LoadingSpinner className="mr-2 h-5 w-5" /> Submitting...
+                        </>
+                    ) : (
+                        <>
+                            <Send className="mr-2 h-5 w-5" /> Submit for Analysis
+                        </>
+                    )}
+                </Button>
+                {isSubmitting && <p className="text-sm text-slate-500 mt-4">Please wait, preparing your results...</p>}
+            </CardContent>
+        </Card>
+    );
+}
+
 
 // --- Polling Component ---
 function AnalysisPollingStage({ sessionId, onAnalysisComplete }: { sessionId: string, onAnalysisComplete: (analysis: any) => void }) {
@@ -314,6 +342,13 @@ function ResultsDisplayStage({ analysis, onComplete }: { analysis: any, onComple
     if (!analysis || !analysis.scores) {
         return <Card className="max-w-3xl mx-auto text-center"><CardContent className="py-12"><p>Could not load analysis results.</p></CardContent></Card>;
     }
+    
+    // UPDATED: Calculate overall score and ensure all scores are integers
+    const readingScore = Math.round(analysis.scores.reading);
+    const repetitionScore = Math.round(analysis.scores.repetition);
+    const comprehensionScore = Math.round(analysis.scores.comprehension);
+    const overallScore = Math.round((readingScore + repetitionScore + comprehensionScore) / 3);
+
     return (
         <Card className="max-w-3xl mx-auto text-center">
             <CardHeader>
@@ -322,11 +357,13 @@ function ResultsDisplayStage({ analysis, onComplete }: { analysis: any, onComple
                 <CardDescription>Here is your performance summary.</CardDescription>
             </CardHeader>
             <CardContent>
-                <p className="text-6xl font-bold text-blue-500">{analysis.scores.overall}<span className="text-3xl text-slate-400">/100</span></p>
+                {/* UPDATED: Display calculated integer score */}
+                <p className="text-6xl font-bold text-blue-500">{overallScore}<span className="text-3xl text-slate-400">/100</span></p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
-                    <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium">Reading</CardTitle><BookOpen className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{analysis.scores.reading}</div></CardContent></Card>
-                    <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium">Repetition</CardTitle><Repeat className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{analysis.scores.repetition}</div></CardContent></Card>
-                    <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium">Comprehension</CardTitle><Puzzle className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{analysis.scores.comprehension}</div></CardContent></Card>
+                    {/* UPDATED: Display rounded scores */}
+                    <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium">Reading</CardTitle><BookOpen className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{readingScore}</div></CardContent></Card>
+                    <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium">Repetition</CardTitle><Repeat className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{repetitionScore}</div></CardContent></Card>
+                    <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium">Comprehension</CardTitle><Puzzle className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{comprehensionScore}</div></CardContent></Card>
                 </div>
                 <Button size="lg" onClick={onComplete} className="mt-8">View Detailed Report <ArrowRight className="ml-2" /></Button>
             </CardContent>
@@ -334,11 +371,14 @@ function ResultsDisplayStage({ analysis, onComplete }: { analysis: any, onComple
     );
 }
 
+
 // --- Main Page Component ---
 export default function CommunicationPracticePage() {
-    const [stage, setStage] = useState("ready");
+    // UPDATED: Added 'finished' stage and 'isSubmitting' state
+    const [stage, setStage] = useState<"ready" | "loading" | "reading" | "repetition" | "comprehension" | "finished" | "polling" | "summary">("ready");
     const [results, setResults] = useState<{ reading: any[], repetition: any[], comprehension: any[] }>({ reading: [], repetition: [], comprehension: [] });
     const [isLoading, setIsLoading] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false); // To disable the submit button
     const [practiceSet, setPracticeSet] = useState<any>(null);
     const [isTerminated, setIsTerminated] = useState(false);
     const [sessionId, setSessionId] = useState<string | null>(null);
@@ -349,7 +389,8 @@ export default function CommunicationPracticePage() {
     useEffect(() => {
         const handleFullscreenChange = () => {
             const isFullscreen = document.fullscreenElement != null;
-            const proctoredStages = ["reading", "repetition", "comprehension"];
+            // UPDATED: Added 'finished' to proctored stages
+            const proctoredStages = ["reading", "repetition", "comprehension", "finished"];
             if (!isFullscreen && proctoredStages.includes(stage) && !isTerminated) {
                 setIsTerminated(true);
                 const terminationFeedback = {
@@ -399,24 +440,36 @@ export default function CommunicationPracticePage() {
         setResults(newResults);
         if (stageName === "reading") setStage("repetition");
         else if (stageName === "repetition") setStage("comprehension");
+        // UPDATED: Instead of starting analysis, go to the 'finished' stage
         else if (stageName === "comprehension") {
-            startAnalysisJob(newResults);
+            setStage("finished");
         }
     };
 
-    const startAnalysisJob = async (allResults: any) => {
+    // UPDATED: Renamed function and added logic to handle submission state
+    const handleSubmitForAnalysis = async () => {
+        if (isSubmitting) return; // Prevent multiple clicks
+        setIsSubmitting(true);
+
         try {
             const formData = new FormData();
-            formData.append('results', JSON.stringify(allResults));
-            allResults.reading.forEach((r: any, i: number) => formData.append(`reading_audio_${i}`, r.audioBlob));
-            allResults.repetition.forEach((r: any, i: number) => formData.append(`repetition_audio_${i}`, r.audioBlob));
+            // Use the most up-to-date results from the state
+            formData.append('results', JSON.stringify(results));
+            results.reading.forEach((r: any, i: number) => formData.append(`reading_audio_${i}`, r.audioBlob));
+            results.repetition.forEach((r: any, i: number) => formData.append(`repetition_audio_${i}`, r.audioBlob));
+            
             const response = await fetch('/api/analyze', { method: 'POST', body: formData });
+            
             if (response.status !== 202) throw new Error("Failed to start analysis job.");
+            
             const { jobId } = await response.json();
             setSessionId(jobId);
             setStage('polling');
         } catch (err: any) {
-            console.error(err);
+            console.error("Error submitting for analysis:", err);
+            // Optionally, handle the UI error state
+            alert("There was an error submitting your session. Please try again later.");
+            setIsSubmitting(false); // Allow user to try again if submission fails
         }
     };
 
@@ -430,16 +483,24 @@ export default function CommunicationPracticePage() {
         router.push(`/feedback/${sessionId}`);
     };
 
-    if (isLoading || (stage !== 'ready' && stage !== 'polling' && stage !== 'summary' && !practiceSet)) {
-        return <div className="flex h-screen items-center justify-center"><LoadingSpinner /><p className="ml-4 text-lg">Preparing exercises...</p></div>;
+    // UPDATED: Adjusted loading condition
+    if (isLoading || (stage !== 'ready' && stage !== 'summary' && !practiceSet)) {
+        // A simple loader for all non-ready states without a practice set
+        if (!practiceSet && stage !== 'ready') {
+             return <div className="flex h-screen items-center justify-center"><LoadingSpinner /><p className="ml-4 text-lg">Preparing exercises...</p></div>;
+        }
     }
 
     return (
         <div className="container mx-auto py-8">
-            {["reading", "repetition", "comprehension"].includes(stage) && <WarningMessage />}
+            {/* UPDATED: Also show warning on the new 'finished' stage */}
+            {["reading", "repetition", "comprehension", "finished"].includes(stage) && <WarningMessage />}
             <h1 className="text-center text-4xl font-bold mb-2">Communication Coach</h1>
             {practiceSet && <p className="text-center text-lg text-slate-500 mb-8">Practice Set: "{practiceSet.setName}"</p>}
-            <ProgressStepper currentStage={stage} />
+            
+            {/* UPDATED: Hide stepper on ready screen */}
+            {stage !== 'ready' && <ProgressStepper currentStage={stage} />}
+
             <div className="mt-8">
                 {stage === "ready" && (
                     <div className="flex flex-col h-[70vh] items-center justify-center text-center p-4">
@@ -458,11 +519,14 @@ export default function CommunicationPracticePage() {
                         </Card>
                     </div>
                 )}
-                {stage === "reading" && <ReadingStage paragraphs={practiceSet.reading} onComplete={(data) => handleStageComplete("reading", data)} />}
-                {stage === "repetition" && <RepetitionStage tasks={practiceSet.repetition} onComplete={(data) => handleStageComplete("repetition", data)} />}
-                {stage === "comprehension" && <ComprehensionStage stories={practiceSet.comprehension} onComplete={(data) => handleStageComplete("comprehension", data)} />}
-                {stage === 'polling' && <AnalysisPollingStage sessionId={sessionId!} onAnalysisComplete={handleAnalysisComplete} />}
-                {stage === 'summary' && <ResultsDisplayStage analysis={finalAnalysis} onComplete={handleViewReport} />}
+                {stage === "reading" && practiceSet && <ReadingStage paragraphs={practiceSet.reading} onComplete={(data) => handleStageComplete("reading", data)} />}
+                {stage === "repetition" && practiceSet && <RepetitionStage tasks={practiceSet.repetition} onComplete={(data) => handleStageComplete("repetition", data)} />}
+                {stage === "comprehension" && practiceSet && <ComprehensionStage stories={practiceSet.comprehension} onComplete={(data) => handleStageComplete("comprehension", data)} />}
+                
+                {/* --- UPDATED: Render the new components for the new stages --- */}
+                {stage === 'finished' && <SubmitStage onSubmit={handleSubmitForAnalysis} isSubmitting={isSubmitting} />}
+                {stage === 'polling' && sessionId && <AnalysisPollingStage sessionId={sessionId} onAnalysisComplete={handleAnalysisComplete} />}
+                {stage === 'summary' && finalAnalysis && <ResultsDisplayStage analysis={finalAnalysis} onComplete={handleViewReport} />}
             </div>
         </div>
     );
