@@ -2,6 +2,9 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    // This is the crucial fix:
+    // It overrides "noEmit": true from the base tsconfig.json
+    "noEmit": false,
     "module": "commonjs",
     "moduleResolution": "node",
     "outDir": "dist",
