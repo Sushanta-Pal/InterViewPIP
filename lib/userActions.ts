@@ -1,18 +1,8 @@
+// lib/userActions.ts
+
 import { supabase } from './supabase';
 import type { User } from '@clerk/nextjs/server';
 import type { UserProfile, Session } from './types';
-// Define the structure of the feedback object
-export interface SessionFeedback {
-    scores: {
-        overall: number;
-        reading: number;
-        repetition: number;
-        comprehension: number;
-    };
-    reportText: string;
-}
-
-
 
 /**
  * Fetches a user's profile from the database.
@@ -67,13 +57,14 @@ export async function createUserProfile(user: User) {
 
 /**
  * Adds a new session to a user's session_history array in Supabase.
+ * This function is called by the background worker.
  * @param userId - The ID of the user.
  * @param newSession - The new session object to add.
  */
 export async function addSessionToHistory(userId: string, newSession: Session) {
   const userProfile = await getUserProfile(userId);
   if (!userProfile) {
-    console.error('Cannot add session: User profile not found.');
+    console.error('Cannot add session: User profile not found for user:', userId);
     return null;
   }
 
@@ -105,4 +96,31 @@ export async function addSessionToHistory(userId: string, newSession: Session) {
     console.log("Successfully added session for user:", userId);
   }
   return data;
+}
+
+/**
+ * NEW FUNCTION
+ * Fetches a specific session result for a user.
+ * This is used by the frontend to poll for the analysis result.
+ * @param sessionId - The ID of the session (which is the BullMQ jobId).
+ * @returns The session object if found, otherwise null.
+ */
+export async function getSessionResult(sessionId: string): Promise<Session | null> {
+    // This function must run on the server, so we can use the server-side auth helper
+    const { auth } = await import('@clerk/nextjs/server');
+    const { userId } = auth();
+    if (!userId) {
+        console.error("getSessionResult error: User not authenticated.");
+        return null;
+    }
+
+    const userProfile = await getUserProfile(userId);
+    if (!userProfile || !userProfile.session_history) {
+        return null;
+    }
+
+    // Find the specific session within the user's history array
+    const session = userProfile.session_history.find(s => s.id === sessionId);
+
+    return session || null;
 }

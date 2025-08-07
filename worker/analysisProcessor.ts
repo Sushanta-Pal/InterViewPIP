@@ -2,6 +2,9 @@
 import { Job } from 'bullmq';
 import { geminiKeyManager, deepgramKeyManager } from '../lib/apiKeyManager';
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
+// --- 1. Import the database action and the Session type ---
+import { addSessionToHistory } from '../lib/userActions';
+import type { Session } from '../lib/types';
 
 // --- TRANSCRIPTION FUNCTION (USES KEY ROTATION) ---
 async function transcribeAudio(audioUrl: string): Promise<string> {
@@ -81,10 +84,19 @@ export default async function (job: Job) {
         const geminiApiKey = geminiKeyManager.getNextKey();
         const analysis = await getAiFeedback(transcripts, allResults.comprehension, geminiApiKey);
 
-        // --- TODO: SAVE TO YOUR DATABASE (e.g., Supabase) ---
-        // This is where you would call your `updateUserSession` or similar function.
-        // Example: await saveAnalysisResult(userId, job.id, analysis);
-        console.log(`Analysis for user ${userId} complete. Overall score: ${analysis.scores.overall}`);
+        // --- 2. Create the session object ---
+        const newSession: Session = {
+            id: job.id!, // Use the BullMQ job ID as the unique session ID
+            type: "Communication",
+            date: new Date().toISOString(),
+            score: analysis.scores.overall,
+            feedback: analysis, // The entire analysis object is stored here
+        };
+
+        // --- 3. Call the database function to save the session ---
+        await addSessionToHistory(userId, newSession);
+
+        console.log(`Analysis for user ${userId} complete and saved to DB. Overall score: ${analysis.scores.overall}`);
 
         return analysis;
     } catch (error: any) {
