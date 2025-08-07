@@ -26,8 +26,8 @@ export default function Footer() {
                             <h3 className="text-sm font-semibold text-slate-900 dark:text-white tracking-wider uppercase">Connect</h3>
                             <div className="flex mt-4 space-x-6">
                                 <a href="#" className="text-slate-500 hover:text-blue-500"><span className="sr-only">Twitter</span><Twitter /></a>
-                                <a href="#" className="text-slate-500 hover:text-blue-500"><span className="sr-only">GitHub</span><Github /></a>
-                                <a href="#" className="text-slate-500 hover:text-blue-500"><span className="sr-only">LinkedIn</span><Linkedin /></a>
+                                <a href="https://github.com/Sushanta-Pal" className="text-slate-500 hover:text-blue-500"><span className="sr-only">GitHub</span><Github /></a>
+                                <a href="https://www.linkedin.com/in/sushanta-pal-340b77254/" className="text-slate-500 hover:text-blue-500"><span className="sr-only">LinkedIn</span><Linkedin /></a>
                             </div>
                         </div>
                     </div>
