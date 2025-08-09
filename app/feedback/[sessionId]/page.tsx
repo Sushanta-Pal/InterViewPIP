@@ -1,8 +1,9 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import FeedbackClientPage from "@/components/feedback/FeedbackClientPage";
-import type { Session } from "@/lib/types";
 import { createClient } from '@supabase/supabase-js';
+import { notFound } from 'next/navigation';
+import type { Session } from "@/lib/types";
 
 // Initialize the Supabase admin client for server-side fetching
 const supabase = createClient(
@@ -16,42 +17,32 @@ export default async function FeedbackPage({ params }: { params: { sessionId: st
         redirect('/sign-in');
     }
 
-    // The sessionId from the URL is the BullMQ job ID
-    const jobId = params.sessionId;
+    const { sessionId } = params; // This is the BullMQ job ID
 
-    // Fetch the session data directly from the 'practice_sessions' table using the job_id
-    const { data: sessionRecord, error } = await supabase
-        .from('practice_sessions')
-        .select('*')
-        .eq('job_id', jobId)
-        .eq('user_id', userId) // Security check to ensure the user owns the session
+    // Fetch the user's profile to access the session history array
+    const { data: userProfile, error } = await supabase
+        .from('user_profiles')
+        .select('session_history')
+        .eq('user_id', userId)
         .single();
-
-    if (error || !sessionRecord) {
-        console.error('Error fetching session from DB or session not found:', error);
-        return (
-            <div className="container mx-auto py-8 text-center">
-                <h1 className="text-2xl font-bold">Session Not Found</h1>
-                <p className="text-slate-500">Could not retrieve the details for this session. It might still be processing or does not exist.</p>
-            </div>
-        );
+    
+    if (error) {
+        console.error("Error fetching user profile for feedback:", error);
+        return notFound();
     }
+    
+    // Find the specific session from the user's history array using the ID
+    const sessionData = userProfile?.session_history?.find((s: Session) => s.id === sessionId) || null;
 
-    // Re-shape the database record to match the 'Session' type expected by the client component
-    const session: Session = {
-        id: sessionRecord.id, // The UUID from the database
-        type: sessionRecord.session_type || "Communication",
-        date: new Date(sessionRecord.created_at).toISOString(),
-        score: sessionRecord.scores.overall,
-        feedback: {
-            scores: sessionRecord.scores,
-            reportText: sessionRecord.feedback_report,
-        },
-    };
+    if (!sessionData) {
+        // This can happen if the session is still being processed or if the ID is invalid
+        console.warn(`Session with ID ${sessionId} not found for user ${userId}`);
+        return notFound();
+    }
 
     return (
         <div className="container mx-auto py-8">
-            <FeedbackClientPage session={session} />
+            <FeedbackClientPage session={sessionData} />
         </div>
     );
 }
