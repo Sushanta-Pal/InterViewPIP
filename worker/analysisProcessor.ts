@@ -2,7 +2,7 @@ import { Job } from 'bullmq';
 import { geminiKeyManager, deepgramKeyManager } from '../lib/apiKeyManager';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
-import type { Session } from '@/lib/types'; // Ensure this type is available and correct
+import type { Session } from '@/lib/types'; // Make sure this type is available and correct
 
 // Initialize the Supabase client
 const supabase = createClient(
