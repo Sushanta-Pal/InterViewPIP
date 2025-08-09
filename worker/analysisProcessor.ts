@@ -10,9 +10,8 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_KEY!
 );
 
-// --- TRANSCRIPTION AND AI FEEDBACK FUNCTIONS (No changes needed here) ---
+// --- TRANSCRIPTION FUNCTION (No changes needed here) ---
 async function transcribeAudio(audioUrl: string): Promise<string> {
-    // ... (your existing transcribeAudio function)
     const apiKey = deepgramKeyManager.getNextKey();
     const response = await fetch("https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true", {
         method: "POST",
@@ -28,33 +27,43 @@ async function transcribeAudio(audioUrl: string): Promise<string> {
     return data.results?.channels[0]?.alternatives[0]?.transcript || "[No speech detected]";
 }
 
+// --- GEMINI ANALYSIS FUNCTION (CORRECTED) ---
 async function getAiFeedback(transcripts: any, comprehensionResults: any, apiKey: string) {
-    // ... (your existing getAiFeedback function)
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ 
         model: "gemini-1.5-flash",
         generationConfig: { responseMimeType: "application/json" }
     });
+
     const readingTasks = transcripts.reading.map((item: any) => `Original: "${item.originalText}"\nUser: "${item.transcript}"`).join('\n\n');
     const repetitionTasks = transcripts.repetition.map((item: any) => `Original: "${item.originalText}"\nUser: "${item.transcript}"`).join('\n\n');
-    const comprehensionScore = Math.round((comprehensionResults.filter((r: any) => r.isCorrect).length / comprehensionResults.length) * 100) || 100;
+    
+    // CORRECTED: Ensure comprehension score is 0 if there are no questions, not 100.
+    const comprehensionScore = comprehensionResults.length > 0
+        ? Math.round((comprehensionResults.filter((r: any) => r.isCorrect).length / comprehensionResults.length) * 100)
+        : 0;
+
     const prompt = `
         You are an expert communication coach. Analyze the user's performance.
         If a transcript is "[No speech detected]", score it as 0.
+
         PART 1: READING ALOUD\n${readingTasks}
         PART 2: REPETITION\n${repetitionTasks}
+
         ANALYSIS TASK:
         1. Calculate a 'reading' score (0-100).
         2. Calculate a 'repetition' score (0-100).
         3. The 'comprehension' score is ${comprehensionScore}.
         4. Calculate an 'overall' score by averaging the three.
         5. Write a detailed 'reportText' in HTML format with feedback.
+
         Return a single JSON object:
         {
           "scores": { "overall": number, "reading": number, "repetition": number, "comprehension": number },
           "reportText": "<html>_string"
         }
     `;
+
     const result = await model.generateContent(prompt);
     return JSON.parse(result.response.text());
 }
