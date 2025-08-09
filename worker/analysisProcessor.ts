@@ -1,11 +1,9 @@
 import { Job } from 'bullmq';
 import { geminiKeyManager, deepgramKeyManager } from '../lib/apiKeyManager';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-// --- 1. Import the Supabase client ---
 import { createClient } from '@supabase/supabase-js';
 
-// --- 2. Initialize the Supabase client ---
-// Ensure these environment variables are available in your worker environment.
+// Initialize the Supabase client
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!, 
     process.env.SUPABASE_SERVICE_KEY!
@@ -68,7 +66,6 @@ async function getAiFeedback(transcripts: any, comprehensionResults: any, apiKey
 // --- DEFAULT EXPORT: THE JOB PROCESSOR ---
 export default async function (job: Job) {
     console.log(`Processing job ${job.id}`);
-    // --- 3. Get the userProfile from the job data ---
     const { userId, allResults, userProfile, readingAudio, repetitionAudio } = job.data;
 
     try {
@@ -90,13 +87,13 @@ export default async function (job: Job) {
         const geminiApiKey = geminiKeyManager.getNextKey();
         const analysis = await getAiFeedback(transcripts, allResults.comprehension, geminiApiKey);
 
-        // --- 4. Upsert the user's profile with their latest info ---
+        // --- Upsert the user's profile with their latest info ---
         const { error: profileError } = await supabase
             .from('user_profiles')
             .upsert({
                 user_id: userId,
                 email: userProfile.email,
-                username: userProfile.fullName, // Or another primary identifier
+                username: userProfile.fullName,
                 full_name: userProfile.fullName,
                 university: userProfile.university,
                 roll_no: userProfile.roll,
@@ -110,17 +107,17 @@ export default async function (job: Job) {
             throw new Error('Failed to update user profile in database.');
         }
 
-        // --- 5. Insert the new session record into the 'practice_sessions' table ---
-        // We will store the BullMQ job ID in this record for easy polling/lookup.
+        // --- CORRECTED: Insert the new session record ---
         const { data: sessionData, error: sessionError } = await supabase
             .from('practice_sessions')
             .insert({
-                id: job.id, // Use the job ID as the session ID
+                // REMOVED: id: job.id,
+                job_id: job.id, // ADDED: Save the job ID in the correct column
                 user_id: userId,
                 scores: analysis.scores,
                 feedback_report: analysis.reportText,
             })
-            .select()
+            .select('id') // Select the new UUID that Supabase generated
             .single();
 
         if (sessionError) {
@@ -130,11 +127,10 @@ export default async function (job: Job) {
         
         console.log(`Analysis for job ${job.id} complete and saved to session ${sessionData.id}.`);
 
-        // The job returns the full analysis, which can be stored or used if needed.
         return analysis;
 
     } catch (error: any) {
         console.error(`Job ${job.id} failed:`, error.message);
-        throw error; // Re-throw the error so BullMQ knows the job failed and can retry it.
+        throw error;
     }
 };
