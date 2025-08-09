@@ -42,3 +42,4 @@ next-env.d.ts
 .env
 .env.*        # ignore all env files
 .env.local    # explicitly ignore .env.local
+*.local     # ignore all local env files

@@ -13,36 +13,35 @@ export async function POST(request: Request) {
 
     try {
         const formData = await request.formData();
-        
-        // --- Get both results and user profile from the form data ---
         const resultsString = formData.get('results') as string;
-        const userProfileString = formData.get('userProfile') as string; // <-- ADD THIS LINE
+        const userProfileString = formData.get('userProfile') as string;
 
         if (!resultsString || !userProfileString) {
-             return new NextResponse("Missing results or user profile data", { status: 400 });
+            return new NextResponse("Missing results or user profile data", { status: 400 });
         }
         
         const allResults = JSON.parse(resultsString);
-        const userProfile = JSON.parse(userProfileString); // <-- ADD THIS LINE
+        const userProfile = JSON.parse(userProfileString);
 
-        // --- The job payload will now include the user's profile ---
         const jobPayload: any = { 
             userId: user.id, 
             allResults,
-            userProfile, // <-- ADD THIS LINE
+            userProfile,
             readingAudio: [], 
             repetitionAudio: [] 
         };
 
         const uploadPromises: Promise<any>[] = [];
 
-        // --- No changes needed for the audio upload logic ---
+        // --- CORRECTED UPLOAD LOGIC ---
         allResults.reading.forEach((item: any, i: number) => {
-            const audioBlob = formData.get(`reading_audio_${i}`) as Blob;
-            if (audioBlob) {
+            const file = formData.get(`reading_audio_${i}`);
+            
+            // Check if the entry is a valid, non-empty File object
+            if (file instanceof File && file.size > 0) {
                 const filename = `reading_${user.id}_${Date.now()}_${i}.webm`;
                 uploadPromises.push(
-                    put(filename, audioBlob, { access: 'public' }).then(blob => {
+                    put(filename, file, { access: 'public' }).then(blob => {
                         jobPayload.readingAudio[i] = { url: blob.url, originalText: item.originalText };
                     })
                 );
@@ -50,11 +49,13 @@ export async function POST(request: Request) {
         });
 
         allResults.repetition.forEach((item: any, i: number) => {
-            const audioBlob = formData.get(`repetition_audio_${i}`) as Blob;
-            if (audioBlob) {
+            const file = formData.get(`repetition_audio_${i}`);
+
+            // Check if the entry is a valid, non-empty File object
+            if (file instanceof File && file.size > 0) {
                 const filename = `repetition_${user.id}_${Date.now()}_${i}.webm`;
                 uploadPromises.push(
-                    put(filename, audioBlob, { access: 'public' }).then(blob => {
+                    put(filename, file, { access: 'public' }).then(blob => {
                         jobPayload.repetitionAudio[i] = { url: blob.url, originalText: item.originalText };
                     })
                 );
@@ -63,13 +64,14 @@ export async function POST(request: Request) {
 
         await Promise.all(uploadPromises);
 
-        // --- Add the complete payload to the queue ---
         const job = await analysisQueue.add('process-analysis', jobPayload);
 
         return NextResponse.json({ message: "Analysis has started.", jobId: job.id }, { status: 202 });
 
     } catch (error: any) {
         console.error("Error enqueuing job:", error);
-        return new NextResponse("Failed to start analysis.", { status: 500 });
+        // Provide a more specific error message if possible
+        const errorMessage = error.message || "Failed to start analysis.";
+        return new NextResponse(errorMessage, { status: 500 });
     }
 }
