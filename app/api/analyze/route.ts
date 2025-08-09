@@ -13,21 +13,30 @@ export async function POST(request: Request) {
 
     try {
         const formData = await request.formData();
+        
+        // --- Get both results and user profile from the form data ---
         const resultsString = formData.get('results') as string;
-        if (!resultsString) {
-             return new NextResponse("Missing results data", { status: 400 });
-        }
-        const allResults = JSON.parse(resultsString);
+        const userProfileString = formData.get('userProfile') as string; // <-- ADD THIS LINE
 
+        if (!resultsString || !userProfileString) {
+             return new NextResponse("Missing results or user profile data", { status: 400 });
+        }
+        
+        const allResults = JSON.parse(resultsString);
+        const userProfile = JSON.parse(userProfileString); // <-- ADD THIS LINE
+
+        // --- The job payload will now include the user's profile ---
         const jobPayload: any = { 
             userId: user.id, 
-            allResults, 
+            allResults,
+            userProfile, // <-- ADD THIS LINE
             readingAudio: [], 
             repetitionAudio: [] 
         };
 
         const uploadPromises: Promise<any>[] = [];
 
+        // --- No changes needed for the audio upload logic ---
         allResults.reading.forEach((item: any, i: number) => {
             const audioBlob = formData.get(`reading_audio_${i}`) as Blob;
             if (audioBlob) {
@@ -54,6 +63,7 @@ export async function POST(request: Request) {
 
         await Promise.all(uploadPromises);
 
+        // --- Add the complete payload to the queue ---
         const job = await analysisQueue.add('process-analysis', jobPayload);
 
         return NextResponse.json({ message: "Analysis has started.", jobId: job.id }, { status: 202 });

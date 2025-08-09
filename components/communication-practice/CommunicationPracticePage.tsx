@@ -2,10 +2,8 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
-import { addSessionToHistory } from "@/lib/userActions";
-import type { Session } from "@/lib/types";
-import {Button} from "@/components/common/Button";
+import { useUser } from "@clerk/nextjs";
+import { Button } from "@/components/common/Button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/common/Card";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
 import { Mic, Play, CheckCircle, XCircle, ArrowRight, Volume2, Award, BookOpen, Repeat, Puzzle, Expand, MicOff, AlertTriangle, Send } from "lucide-react";
@@ -24,13 +22,12 @@ const WarningMessage = () => (
 
 // --- Progress Stepper Component ---
 const ProgressStepper = ({ currentStage }: { currentStage: string }) => {
-    // UPDATED: Added 'finished' stage to the stepper
     const stages = ["reading", "repetition", "comprehension", "finished", "polling", "summary"];
     const stageLabels: { [key: string]: string } = {
         reading: "Reading",
         repetition: "Repetition",
         comprehension: "Comprehension",
-        finished: "Submit", // Label for the new submission stage
+        finished: "Submit",
         polling: "Analyzing",
         summary: "Summary"
     };
@@ -38,7 +35,7 @@ const ProgressStepper = ({ currentStage }: { currentStage: string }) => {
 
     return (
         <div className="flex justify-center items-center space-x-2 md:space-x-4 mb-8">
-            {stages.slice(0, 5).map((stage, index) => ( // Display up to 'Analyzing'
+            {stages.slice(0, 5).map((stage, index) => (
                 <React.Fragment key={stage}>
                     <div className="flex flex-col items-center text-center">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${index <= currentIndex ? "bg-blue-600 text-white" : "bg-slate-200 dark:bg-slate-700"}`}>
@@ -92,7 +89,7 @@ function ReadingStage({ paragraphs, onComplete }: { paragraphs: string[], onComp
                 handleNext();
             };
             mediaRecorderRef.current.start();
-            timeoutRef.current = setTimeout(stopRecording, 20000); // 20-second safety timeout
+            timeoutRef.current = setTimeout(stopRecording, 20000);
         } catch (err) {
             alert("Microphone permission is required to proceed.");
             setIsRecording(false);
@@ -220,7 +217,7 @@ function ComprehensionStage({ stories, onComplete }: { stories: any[], onComplet
 
             if (isLastQuestionInStory) {
                 if (isLastStory) {
-                    onComplete(updatedResults); // Complete the final stage
+                    onComplete(updatedResults);
                 } else {
                     setCurrentStoryIndex(prev => prev + 1);
                     setCurrentQuestionIndex(0);
@@ -264,7 +261,7 @@ function ComprehensionStage({ stories, onComplete }: { stories: any[], onComplet
     );
 }
 
-// --- NEW Component: Submit for Analysis Stage ---
+// --- Submit for Analysis Stage ---
 function SubmitStage({ onSubmit, isSubmitting }: { onSubmit: () => void; isSubmitting: boolean; }) {
     return (
         <Card className="max-w-3xl mx-auto text-center shadow-xl">
@@ -343,7 +340,6 @@ function ResultsDisplayStage({ analysis, onComplete }: { analysis: any, onComple
         return <Card className="max-w-3xl mx-auto text-center"><CardContent className="py-12"><p>Could not load analysis results.</p></CardContent></Card>;
     }
     
-    // UPDATED: Calculate overall score and ensure all scores are integers
     const readingScore = Math.round(analysis.scores.reading);
     const repetitionScore = Math.round(analysis.scores.repetition);
     const comprehensionScore = Math.round(analysis.scores.comprehension);
@@ -357,10 +353,8 @@ function ResultsDisplayStage({ analysis, onComplete }: { analysis: any, onComple
                 <CardDescription>Here is your performance summary.</CardDescription>
             </CardHeader>
             <CardContent>
-                {/* UPDATED: Display calculated integer score */}
                 <p className="text-6xl font-bold text-blue-500">{overallScore}<span className="text-3xl text-slate-400">/100</span></p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
-                    {/* UPDATED: Display rounded scores */}
                     <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium">Reading</CardTitle><BookOpen className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{readingScore}</div></CardContent></Card>
                     <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium">Repetition</CardTitle><Repeat className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{repetitionScore}</div></CardContent></Card>
                     <Card><CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm font-medium">Comprehension</CardTitle><Puzzle className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{comprehensionScore}</div></CardContent></Card>
@@ -374,31 +368,23 @@ function ResultsDisplayStage({ analysis, onComplete }: { analysis: any, onComple
 
 // --- Main Page Component ---
 export default function CommunicationPracticePage() {
-    // UPDATED: Added 'finished' stage and 'isSubmitting' state
     const [stage, setStage] = useState<"ready" | "loading" | "reading" | "repetition" | "comprehension" | "finished" | "polling" | "summary">("ready");
     const [results, setResults] = useState<{ reading: any[], repetition: any[], comprehension: any[] }>({ reading: [], repetition: [], comprehension: [] });
     const [isLoading, setIsLoading] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false); // To disable the submit button
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [practiceSet, setPracticeSet] = useState<any>(null);
     const [isTerminated, setIsTerminated] = useState(false);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [finalAnalysis, setFinalAnalysis] = useState<any>(null);
     const router = useRouter();
-    const { userId } = useAuth();
+    const { user } = useUser();
 
     useEffect(() => {
         const handleFullscreenChange = () => {
             const isFullscreen = document.fullscreenElement != null;
-            // UPDATED: Added 'finished' to proctored stages
             const proctoredStages = ["reading", "repetition", "comprehension", "finished"];
             if (!isFullscreen && proctoredStages.includes(stage) && !isTerminated) {
                 setIsTerminated(true);
-                const terminationFeedback = {
-                    scores: { overall: 0, reading: 0, repetition: 0, comprehension: 0 },
-                    reportText: `<h2 style="color: red;">Session Terminated</h2><p>The session was ended because you exited full-screen mode. A score of 0 has been recorded.</p>`,
-                };
-                // This needs a way to save the terminated session
-                // For now, we'll just log it and redirect
                 console.warn("Session terminated due to exiting fullscreen.");
                 router.push("/dashboard");
             }
@@ -428,6 +414,18 @@ export default function CommunicationPracticePage() {
         }
     }, [stage, router]);
 
+    useEffect(() => {
+        const proctoredStages = ["reading", "repetition", "comprehension", "finished", "polling"];
+        if (proctoredStages.includes(stage)) {
+            document.body.classList.add('proctored-session-active');
+        } else {
+            document.body.classList.remove('proctored-session-active');
+        }
+        return () => {
+            document.body.classList.remove('proctored-session-active');
+        };
+    }, [stage]);
+
     const handleStartSession = () => {
         document.documentElement.requestFullscreen().catch(err => {
             console.error(`Error attempting to enable full-screen mode: ${err.message}`);
@@ -440,21 +438,29 @@ export default function CommunicationPracticePage() {
         setResults(newResults);
         if (stageName === "reading") setStage("repetition");
         else if (stageName === "repetition") setStage("comprehension");
-        // UPDATED: Instead of starting analysis, go to the 'finished' stage
         else if (stageName === "comprehension") {
             setStage("finished");
         }
     };
 
-    // UPDATED: Renamed function and added logic to handle submission state
     const handleSubmitForAnalysis = async () => {
-        if (isSubmitting) return; // Prevent multiple clicks
+        if (isSubmitting || !user) {
+            if (!user) alert("User data not loaded. Please wait a moment.");
+            return;
+        }
         setIsSubmitting(true);
+
+        const userProfile = {
+            userId: user.id,
+            email: user.primaryEmailAddress?.emailAddress,
+            ...user.unsafeMetadata,
+        };
 
         try {
             const formData = new FormData();
-            // Use the most up-to-date results from the state
             formData.append('results', JSON.stringify(results));
+            formData.append('userProfile', JSON.stringify(userProfile));
+
             results.reading.forEach((r: any, i: number) => formData.append(`reading_audio_${i}`, r.audioBlob));
             results.repetition.forEach((r: any, i: number) => formData.append(`repetition_audio_${i}`, r.audioBlob));
             
@@ -467,9 +473,8 @@ export default function CommunicationPracticePage() {
             setStage('polling');
         } catch (err: any) {
             console.error("Error submitting for analysis:", err);
-            // Optionally, handle the UI error state
             alert("There was an error submitting your session. Please try again later.");
-            setIsSubmitting(false); // Allow user to try again if submission fails
+            setIsSubmitting(false);
         }
     };
 
@@ -483,9 +488,7 @@ export default function CommunicationPracticePage() {
         router.push(`/feedback/${sessionId}`);
     };
 
-    // UPDATED: Adjusted loading condition
     if (isLoading || (stage !== 'ready' && stage !== 'summary' && !practiceSet)) {
-        // A simple loader for all non-ready states without a practice set
         if (!practiceSet && stage !== 'ready') {
              return <div className="flex h-screen items-center justify-center"><LoadingSpinner /><p className="ml-4 text-lg">Preparing exercises...</p></div>;
         }
@@ -493,12 +496,10 @@ export default function CommunicationPracticePage() {
 
     return (
         <div className="container mx-auto py-8">
-            {/* UPDATED: Also show warning on the new 'finished' stage */}
             {["reading", "repetition", "comprehension", "finished"].includes(stage) && <WarningMessage />}
             <h1 className="text-center text-4xl font-bold mb-2">Communication Coach</h1>
             {practiceSet && <p className="text-center text-lg text-slate-500 mb-8">Practice Set: "{practiceSet.setName}"</p>}
             
-            {/* UPDATED: Hide stepper on ready screen */}
             {stage !== 'ready' && <ProgressStepper currentStage={stage} />}
 
             <div className="mt-8">
@@ -523,7 +524,6 @@ export default function CommunicationPracticePage() {
                 {stage === "repetition" && practiceSet && <RepetitionStage tasks={practiceSet.repetition} onComplete={(data) => handleStageComplete("repetition", data)} />}
                 {stage === "comprehension" && practiceSet && <ComprehensionStage stories={practiceSet.comprehension} onComplete={(data) => handleStageComplete("comprehension", data)} />}
                 
-                {/* --- UPDATED: Render the new components for the new stages --- */}
                 {stage === 'finished' && <SubmitStage onSubmit={handleSubmitForAnalysis} isSubmitting={isSubmitting} />}
                 {stage === 'polling' && sessionId && <AnalysisPollingStage sessionId={sessionId} onAnalysisComplete={handleAnalysisComplete} />}
                 {stage === 'summary' && finalAnalysis && <ResultsDisplayStage analysis={finalAnalysis} onComplete={handleViewReport} />}

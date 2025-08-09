@@ -22,7 +22,10 @@ export default function Navbar() {
               <Button asChild variant='ghost'>
                 <Link href="/dashboard">Dashboard</Link>
               </Button>
-              <UserButton afterSignOutUrl="/" />
+               <UserButton 
+                afterSignOutUrl="/" 
+                userProfileUrl="/dashboard/profile" // Add this line
+              />
             </div>
           ) : (
             <div className="hidden sm:flex items-center space-x-2">
