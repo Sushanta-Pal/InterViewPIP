@@ -1,34 +1,57 @@
-// 1. Place this code in: app/feedback/[sessionId]/page.tsx
-// This is the SERVER component that fetches data for a specific session.
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import FeedbackClientPage from "@/components/feedback/FeedbackClientPage";
+import type { Session } from "@/lib/types";
+import { createClient } from '@supabase/supabase-js';
 
-import { auth } from '@clerk/nextjs/server';
-import { getUserProfile } from '@/lib/userActions';
-import FeedbackClientPage from '@/components/feedback/FeedbackClientPage';
-import { notFound } from 'next/navigation';
+// Initialize the Supabase admin client for server-side fetching
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_KEY!
+);
 
-// The props for this page will include `params` with a `sessionId`
-type FeedbackPageProps = {
-    params: { sessionId: string };
-};
-
-export default async function FeedbackPage({ params }: FeedbackPageProps) {
+export default async function FeedbackPage({ params }: { params: { sessionId: string } }) {
     const { userId } = auth();
-    // If the user isn't logged in, show a 404 page
     if (!userId) {
-        return notFound();
+        redirect('/sign-in');
     }
 
-    const { sessionId } = params;
-    const userProfile = await getUserProfile(userId);
-    
-    // Find the specific session from the user's history using the ID from the URL
-    const sessionData = userProfile?.session_history?.find(s => s.id === sessionId) || null;
+    // The sessionId from the URL is now the UUID from the 'practice_sessions' table
+    const sessionId = params.sessionId;
 
-    // If no session with that ID is found for the user, show a 404 page
-    if (!sessionData) {
-        return notFound();
+    // Fetch the session data directly from the 'practice_sessions' table
+    const { data: sessionRecord, error } = await supabase
+        .from('practice_sessions')
+        .select('*')
+        .eq('id', sessionId) // Query by the primary key UUID
+        .eq('user_id', userId) // Security check to ensure the user owns the session
+        .single();
+
+    if (error || !sessionRecord) {
+        console.error('Error fetching session from DB or session not found:', error);
+        return (
+            <div className="container mx-auto py-8 text-center">
+                <h1 className="text-2xl font-bold">Session Not Found</h1>
+                <p className="text-slate-500">Could not retrieve the details for this session. It might still be processing or does not exist.</p>
+            </div>
+        );
     }
 
-    // Render the client component, passing the found session data as a prop
-    return <FeedbackClientPage session={sessionData} />;
+    // Re-shape the database record to match the 'Session' type expected by the client component
+    const session: Session = {
+        id: sessionRecord.id,
+        type: sessionRecord.session_type || "Communication",
+        date: new Date(sessionRecord.created_at).toISOString(),
+        score: sessionRecord.scores.overall,
+        feedback: {
+            scores: sessionRecord.scores,
+            reportText: sessionRecord.feedback_report,
+        },
+    };
+
+    return (
+        <div className="container mx-auto py-8">
+            <FeedbackClientPage session={session} />
+        </div>
+    );
 }
