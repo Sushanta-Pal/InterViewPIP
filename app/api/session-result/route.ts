@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
+import type { Session } from '@/lib/types';
 
 // Initialize the Supabase admin client
 const supabase = createClient(
@@ -22,33 +23,30 @@ export async function GET(request: Request) {
     }
 
     try {
-        // CORRECTED: Query the 'job_id' column instead of the 'id' column
-        const { data, error } = await supabase
-            .from('practice_sessions')
-            .select('scores, feedback_report')
-            .eq('job_id', sessionId) // <-- THIS IS THE FIX
-            .eq('user_id', userId)   // Security check to ensure the user owns this session
+        // --- 1. Fetch the user's profile to access the session history array ---
+        const { data: userProfile, error } = await supabase
+            .from('user_profiles')
+            .select('session_history')
+            .eq('user_id', userId)
             .single();
 
         if (error) {
-            // This error means the row was not found, which is normal while the worker is processing.
-            if (error.code === 'PGRST116') { 
+            // If the profile doesn't exist yet, it's a pending state.
+            if (error.code === 'PGRST116') {
                 return NextResponse.json({ status: 'pending' });
             }
-            // For any other database errors, log them.
-            console.error('Supabase error fetching session result:', error);
+            console.error('Supabase error fetching user profile:', error);
             throw error;
         }
 
-        // If data was found, check if the worker has populated the fields.
-        if (data && data.scores && data.feedback_report) {
-            const feedback = {
-                scores: data.scores,
-                reportText: data.feedback_report,
-            };
-            return NextResponse.json({ feedback });
+        // --- 2. Find the specific session within the session_history array ---
+        const session = userProfile?.session_history?.find((s: Session) => s.id === sessionId) || null;
+
+        if (session && session.feedback) {
+            // Found the completed session, return its feedback object
+            return NextResponse.json({ feedback: session.feedback });
         } else {
-            // The row might exist but is not yet populated by the worker.
+            // The session isn't in the history yet, so the job is still pending.
             return NextResponse.json({ status: 'pending' });
         }
 
