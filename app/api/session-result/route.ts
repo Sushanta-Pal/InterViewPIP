@@ -15,43 +15,40 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const sessionId = searchParams.get('sessionId');
+    const sessionId = searchParams.get('sessionId'); // This is the BullMQ job ID
 
     if (!sessionId) {
         return new NextResponse("Session ID is required", { status: 400 });
     }
 
     try {
-        // Query the 'practice_sessions' table for the specific session ID.
-        // We also check that the user_id matches to enforce security.
+        // CORRECTED: Query the 'job_id' column instead of the 'id' column
         const { data, error } = await supabase
             .from('practice_sessions')
             .select('scores, feedback_report')
-            .eq('id', sessionId)
-            .eq('user_id', userId) // Security check
+            .eq('job_id', sessionId) // <-- THIS IS THE FIX
+            .eq('user_id', userId)   // Security check to ensure the user owns this session
             .single();
 
         if (error) {
-            // This specific error code means the row was not found.
-            // This is expected while the worker is still processing the job.
-            if (error.code === 'PGRST116') {
+            // This error means the row was not found, which is normal while the worker is processing.
+            if (error.code === 'PGRST116') { 
                 return NextResponse.json({ status: 'pending' });
             }
-            // For other errors, log them and return a server error.
+            // For any other database errors, log them.
             console.error('Supabase error fetching session result:', error);
             throw error;
         }
 
-        // Check if the worker has populated the scores and report fields.
+        // If data was found, check if the worker has populated the fields.
         if (data && data.scores && data.feedback_report) {
-            // The job is done. Construct the feedback object the frontend expects.
             const feedback = {
                 scores: data.scores,
                 reportText: data.feedback_report,
             };
             return NextResponse.json({ feedback });
         } else {
-            // The row might exist, but the data isn't ready yet.
+            // The row might exist but is not yet populated by the worker.
             return NextResponse.json({ status: 'pending' });
         }
 
