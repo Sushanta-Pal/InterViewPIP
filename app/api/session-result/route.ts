@@ -1,8 +1,12 @@
-// app/api/session-result/route.ts
-
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { getUserProfile } from '@/lib/userActions'; // We can reuse this server-safe function
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize the Supabase admin client
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_KEY!
+);
 
 export async function GET(request: Request) {
     const { userId } = auth();
@@ -18,24 +22,41 @@ export async function GET(request: Request) {
     }
 
     try {
-        const userProfile = await getUserProfile(userId);
-        if (!userProfile || !userProfile.session_history) {
-            // Return a specific status that the client can check
-            return NextResponse.json({ status: 'pending' }, { status: 200 });
+        // Query the 'practice_sessions' table for the specific session ID.
+        // We also check that the user_id matches to enforce security.
+        const { data, error } = await supabase
+            .from('practice_sessions')
+            .select('scores, feedback_report')
+            .eq('id', sessionId)
+            .eq('user_id', userId) // Security check
+            .single();
+
+        if (error) {
+            // This specific error code means the row was not found.
+            // This is expected while the worker is still processing the job.
+            if (error.code === 'PGRST116') {
+                return NextResponse.json({ status: 'pending' });
+            }
+            // For other errors, log them and return a server error.
+            console.error('Supabase error fetching session result:', error);
+            throw error;
         }
 
-        const session = userProfile.session_history.find(s => s.id === sessionId);
-
-        if (session && session.feedback) {
-            // Found the completed session, return it
-            return NextResponse.json(session, { status: 200 });
+        // Check if the worker has populated the scores and report fields.
+        if (data && data.scores && data.feedback_report) {
+            // The job is done. Construct the feedback object the frontend expects.
+            const feedback = {
+                scores: data.scores,
+                reportText: data.feedback_report,
+            };
+            return NextResponse.json({ feedback });
         } else {
-            // The session isn't in the history yet, or feedback is missing
-            return NextResponse.json({ status: 'pending' }, { status: 200 });
+            // The row might exist, but the data isn't ready yet.
+            return NextResponse.json({ status: 'pending' });
         }
 
     } catch (error) {
-        console.error("Error fetching session result:", error);
+        console.error("Error in /api/session-result:", error);
         return new NextResponse("Internal Server Error", { status: 500 });
     }
 }
