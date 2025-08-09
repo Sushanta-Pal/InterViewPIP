@@ -16,14 +16,14 @@ export default async function FeedbackPage({ params }: { params: { sessionId: st
         redirect('/sign-in');
     }
 
-    // The sessionId from the URL is now the UUID from the 'practice_sessions' table
-    const sessionId = params.sessionId;
+    // The sessionId from the URL is the BullMQ job ID
+    const jobId = params.sessionId;
 
-    // Fetch the session data directly from the 'practice_sessions' table
+    // Fetch the session data directly from the 'practice_sessions' table using the job_id
     const { data: sessionRecord, error } = await supabase
         .from('practice_sessions')
         .select('*')
-        .eq('id', sessionId) // Query by the primary key UUID
+        .eq('job_id', jobId)
         .eq('user_id', userId) // Security check to ensure the user owns the session
         .single();
 
@@ -39,7 +39,7 @@ export default async function FeedbackPage({ params }: { params: { sessionId: st
 
     // Re-shape the database record to match the 'Session' type expected by the client component
     const session: Session = {
-        id: sessionRecord.id,
+        id: sessionRecord.id, // The UUID from the database
         type: sessionRecord.session_type || "Communication",
         date: new Date(sessionRecord.created_at).toISOString(),
         score: sessionRecord.scores.overall,
