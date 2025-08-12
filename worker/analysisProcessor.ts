@@ -1,16 +1,20 @@
+// worker/analysisProcessor.ts
+
 import { Job } from 'bullmq';
 import { geminiKeyManager, deepgramKeyManager } from '../lib/apiKeyManager';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
-import type { Session } from '@/lib/types'; // Make sure this type is available and correct
+import { google } from 'googleapis'; // Import the googleapis library
+import type { Session } from '@/lib/types';
 
-// Initialize the Supabase client
+// Initialize Supabase
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!, 
     process.env.SUPABASE_SERVICE_KEY!
 );
 
-// --- TRANSCRIPTION FUNCTION (No changes needed here) ---
+// --- HELPER FUNCTIONS (No changes needed for transcribe and getAiFeedback) ---
+
 async function transcribeAudio(audioUrl: string): Promise<string> {
     const apiKey = deepgramKeyManager.getNextKey();
     const response = await fetch("https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true", {
@@ -27,7 +31,6 @@ async function transcribeAudio(audioUrl: string): Promise<string> {
     return data.results?.channels[0]?.alternatives[0]?.transcript || "[No speech detected]";
 }
 
-// --- GEMINI ANALYSIS FUNCTION (CORRECTED) ---
 async function getAiFeedback(transcripts: any, comprehensionResults: any, apiKey: string) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ 
@@ -38,7 +41,6 @@ async function getAiFeedback(transcripts: any, comprehensionResults: any, apiKey
     const readingTasks = transcripts.reading.map((item: any) => `Original: "${item.originalText}"\nUser: "${item.transcript}"`).join('\n\n');
     const repetitionTasks = transcripts.repetition.map((item: any) => `Original: "${item.originalText}"\nUser: "${item.transcript}"`).join('\n\n');
     
-    // CORRECTED: Ensure comprehension score is 0 if there are no questions, not 100.
     const comprehensionScore = comprehensionResults.length > 0
         ? Math.round((comprehensionResults.filter((r: any) => r.isCorrect).length / comprehensionResults.length) * 100)
         : 0;
@@ -68,8 +70,7 @@ async function getAiFeedback(transcripts: any, comprehensionResults: any, apiKey
     return JSON.parse(result.response.text());
 }
 
-
-// --- DEFAULT EXPORT: THE JOB PROCESSOR ---
+// --- MAIN JOB PROCESSOR ---
 export default async function (job: Job) {
     console.log(`Processing job ${job.id}`);
     const { userId, allResults, userProfile, readingAudio, repetitionAudio } = job.data;
@@ -77,6 +78,7 @@ export default async function (job: Job) {
     try {
         const transcripts = { reading: [] as any[], repetition: [] as any[] };
 
+        // Transcription promises remain the same, as they use the public URL
         const transcriptionPromises = [
             ...readingAudio.map(async (item: any) => {
                 if (!item || !item.url) return;
@@ -94,33 +96,29 @@ export default async function (job: Job) {
 
         const geminiApiKey = geminiKeyManager.getNextKey();
         const analysis = await getAiFeedback(transcripts, allResults.comprehension, geminiApiKey);
-
-        // --- 1. Fetch the user's current profile from the database ---
+        
+        // --- Database update logic remains the same ---
         const { data: currentProfile, error: fetchError } = await supabase
             .from('user_profiles')
             .select('session_history')
             .eq('user_id', userId)
             .single();
 
-        if (fetchError && fetchError.code !== 'PGRST116') { // Ignore 'not found' error, as we can create the profile
-            console.error('Supabase fetch error:', fetchError);
+        if (fetchError && fetchError.code !== 'PGRST116') {
             throw new Error(`Failed to fetch user profile: ${fetchError.message}`);
         }
 
-        // --- 2. Create the new session object ---
         const newSession: Session = {
-            id: job.id!.toString(), // Use the BullMQ job ID as the unique session ID
+            id: job.id!.toString(),
             type: "Communication",
             date: new Date().toISOString(),
             score: analysis.scores.overall,
             feedback: analysis,
         };
 
-        // --- 3. Append the new session to the existing history ---
         const existingHistory = currentProfile?.session_history || [];
         const updatedHistory = [...existingHistory, newSession];
 
-        // --- 4. Recalculate all average scores ---
         let totalReading = 0, totalRepetition = 0, totalComprehension = 0, totalOverall = 0;
         updatedHistory.forEach(s => {
             totalReading += s.feedback.scores.reading || 0;
@@ -134,36 +132,71 @@ export default async function (job: Job) {
         const average_comprehension_score = Math.round(totalComprehension / count);
         const overall_average_score = Math.round(totalOverall / count);
 
-        // --- 5. Upsert the entire profile with the updated history and scores ---
         const { error: upsertError } = await supabase
             .from('user_profiles')
             .upsert({
-                user_id: userId,
-                email: userProfile.email,
-                username: userProfile.fullName,
-                full_name: userProfile.fullName,
-                university: userProfile.university,
-                roll_no: userProfile.roll,
-                dob: userProfile.dob,
-                stream: userProfile.stream,
-                gender: userProfile.gender,
-                session_history: updatedHistory, // Save the updated array
-                average_reading_score,
-                average_repeating_score,
-                average_comprehension_score,
-                overall_average_score,
+                user_id: userId, email: userProfile.email, username: userProfile.fullName,
+                full_name: userProfile.fullName, university: userProfile.university, roll_no: userProfile.roll,
+                dob: userProfile.dob, stream: userProfile.stream, gender: userProfile.gender,
+                session_history: updatedHistory, average_reading_score, average_repeating_score,
+                average_comprehension_score, overall_average_score,
             });
 
         if (upsertError) {
-            console.error('Supabase profile upsert error:', upsertError);
             throw new Error('Failed to update user profile in database.');
         }
         
-        console.log(`Job ${job.id} complete. User profile and session history updated for ${userId}.`);
-        return analysis;
+        console.log(`Job ${job.id} complete. User profile updated for ${userId}.`);
 
     } catch (error: any) {
         console.error(`Job ${job.id} failed:`, error.message);
-        throw error;
+        throw error; // Re-throw the error to let BullMQ know the job failed
+    } finally {
+        // --- NEW: GOOGLE DRIVE CLEANUP LOGIC ---
+        // This block runs whether the job succeeds or fails, ensuring cleanup.
+        console.log(`[Job ${job.id}] Starting Google Drive cleanup...`);
+
+        // Collect all file IDs from the job data
+        const fileIdsToDelete = [
+            ...readingAudio.map((item: any) => item?.fileId),
+            ...repetitionAudio.map((item: any) => item?.fileId)
+        ].filter(id => id); // Filter out any null/undefined entries
+
+        if (fileIdsToDelete.length > 0) {
+            
+            // =================================================================
+            // === IMPORTANT: For testing, the delete logic is commented out. ===
+            // === UNCOMMENT THE FOLLOWING BLOCK FOR PRODUCTION.               ===
+            // =================================================================
+            /*
+            try {
+                const auth = new google.auth.GoogleAuth({
+                    credentials: {
+                        client_email: process.env.GOOGLE_CLIENT_EMAIL,
+                        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+                    },
+                    scopes: ['https://www.googleapis.com/auth/drive'],
+                });
+                const drive = google.drive({ version: 'v3', auth });
+
+                // Create a promise for each deletion
+                const deletionPromises = fileIdsToDelete.map(fileId => {
+                    console.log(`[Job ${job.id}] Deleting file: ${fileId}`);
+                    return drive.files.delete({ fileId });
+                });
+
+                await Promise.all(deletionPromises);
+                console.log(`[Job ${job.id}] Successfully deleted ${fileIdsToDelete.length} files from Google Drive.`);
+
+            } catch (cleanupError: any) {
+                console.error(`[Job ${job.id}] FAILED to delete files from Google Drive:`, cleanupError.message);
+            }
+            */
+            // =================================================================
+            
+            console.log(`[Job ${job.id}] TEST MODE: Would have deleted ${fileIdsToDelete.length} files. Cleanup logic is commented out.`);
+        } else {
+            console.log(`[Job ${job.id}] No files to delete.`);
+        }
     }
-};
+}
