@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
+import { useUser, useAuth } from "@clerk/nextjs";
+import { createClient } from '@supabase/supabase-js';
 import { Button } from "@/components/common/Button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/common/Card";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
@@ -15,7 +16,6 @@ const WarningMessage = () => (
         <div><p className="font-bold">Proctored Session Active</p><p>Please remain in full-screen mode. Exiting will immediately end the session.</p></div>
     </div>
 );
-
 const ProgressStepper = ({ currentStage }: { currentStage: string }) => {
     const stages = ["reading", "repetition", "comprehension", "finished", "polling", "summary"];
     const stageLabels: { [key: string]: string } = { reading: "Reading", repetition: "Repetition", comprehension: "Comprehension", finished: "Submit", polling: "Analyzing", summary: "Summary" };
@@ -36,31 +36,21 @@ const ProgressStepper = ({ currentStage }: { currentStage: string }) => {
         </div>
     );
 };
-
-// --- Stage Components (No Changes) ---
 function ReadingStage({ paragraphs, onComplete }: { paragraphs: string[], onComplete: (data: any[]) => void }) {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isRecording, setIsRecording] = useState(false);
     const [readingResults, setReadingResults] = useState<any[]>([]);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-
     const handleNext = () => {
-        if (currentIndex < paragraphs.length - 1) {
-            setCurrentIndex(prev => prev + 1);
-        } else {
-            onComplete(readingResults);
-        }
+        if (currentIndex < paragraphs.length - 1) setCurrentIndex(prev => prev + 1);
+        else onComplete(readingResults);
     };
-
     const stopRecording = () => {
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        if (mediaRecorderRef.current?.state === "recording") {
-            mediaRecorderRef.current.stop();
-        }
+        if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
         setIsRecording(false);
     };
-
     const startRecording = async () => {
         setIsRecording(true);
         try {
@@ -81,31 +71,22 @@ function ReadingStage({ paragraphs, onComplete }: { paragraphs: string[], onComp
             setIsRecording(false);
         }
     };
-
     return (
         <Card className="max-w-3xl mx-auto text-center shadow-xl">
-            <CardHeader>
-                <CardTitle>Stage 1: Reading Aloud ({currentIndex + 1}/{paragraphs.length})</CardTitle>
-                <CardDescription>Click Record, read the paragraph, then click Stop.</CardDescription>
-            </CardHeader>
+            <CardHeader><CardTitle>Stage 1: Reading Aloud ({currentIndex + 1}/{paragraphs.length})</CardTitle><CardDescription>Click Record, read the paragraph, then click Stop.</CardDescription></CardHeader>
             <CardContent>
                 <p className="text-lg mb-8 p-6 bg-slate-100 dark:bg-slate-800 rounded-lg border">{paragraphs[currentIndex]}</p>
-                <Button onClick={isRecording ? stopRecording : startRecording} size="lg" variant={isRecording ? "destructive" : "default"}>
-                    {isRecording ? <MicOff className="mr-2" /> : <Mic className="mr-2" />}
-                    {isRecording ? 'Stop Recording' : 'Start Recording'}
-                </Button>
+                <Button onClick={isRecording ? stopRecording : startRecording} size="lg" variant={isRecording ? "destructive" : "default"}>{isRecording ? <MicOff className="mr-2" /> : <Mic className="mr-2" />}{isRecording ? 'Stop Recording' : 'Start Recording'}</Button>
                 {isRecording && <div className="text-red-500 mt-4 flex items-center justify-center animate-pulse font-semibold"><div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>Recording...</div>}
             </CardContent>
         </Card>
     );
 }
-
 function RepetitionStage({ tasks, onComplete }: { tasks: any[], onComplete: (data: any[]) => void }) {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [status, setStatus] = useState<"idle" | "playing" | "ready_to_record" | "recording">("idle");
     const [repetitionResults, setRepetitionResults] = useState<any[]>([]);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-
     const handleNext = () => {
         if (currentIndex < tasks.length - 1) {
             setCurrentIndex(prev => prev + 1);
@@ -114,14 +95,12 @@ function RepetitionStage({ tasks, onComplete }: { tasks: any[], onComplete: (dat
             onComplete(repetitionResults);
         }
     };
-
     const handleListen = () => {
         setStatus("playing");
         const audio = new Audio(tasks[currentIndex].audioUrl);
         audio.play().catch(err => setStatus("idle"));
         audio.onended = () => setStatus("ready_to_record");
     };
-
     const startRecording = async () => {
         setStatus("recording");
         try {
@@ -141,68 +120,48 @@ function RepetitionStage({ tasks, onComplete }: { tasks: any[], onComplete: (dat
             setStatus("ready_to_record");
         }
     };
-    
     const stopRecording = () => {
-        if (mediaRecorderRef.current?.state === "recording") {
-            mediaRecorderRef.current.stop();
-        }
+        if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
     }
-
     return (
         <Card className="max-w-3xl mx-auto text-center shadow-xl">
-            <CardHeader>
-                <CardTitle>Stage 2: Listen & Repeat ({currentIndex + 1}/{tasks.length})</CardTitle>
-                <CardDescription>Listen to the phrase, then record your repetition.</CardDescription>
-            </CardHeader>
+            <CardHeader><CardTitle>Stage 2: Listen & Repeat ({currentIndex + 1}/{tasks.length})</CardTitle><CardDescription>Listen to the phrase, then record your repetition.</CardDescription></CardHeader>
             <CardContent className="min-h-[150px] flex flex-col justify-center items-center">
                 {status === "idle" && <Button size="lg" onClick={handleListen}><Volume2 className="mr-2" /> Listen</Button>}
                 {status === "playing" && <p className="text-blue-500 font-semibold animate-pulse">🔊 Playing audio...</p>}
                 {status === "ready_to_record" && <Button size="lg" onClick={startRecording}><Mic className="mr-2" /> Record Now</Button>}
-                {status === "recording" && (
-                    <div className="flex flex-col items-center">
-                        <p className="text-red-500 font-semibold animate-pulse mb-4">🔴 Recording...</p>
-                        <Button size="lg" variant="destructive" onClick={stopRecording}><MicOff className="mr-2" /> Stop Recording</Button>
-                    </div>
-                )}
+                {status === "recording" && (<div className="flex flex-col items-center"><p className="text-red-500 font-semibold animate-pulse mb-4">🔴 Recording...</p><Button size="lg" variant="destructive" onClick={stopRecording}><MicOff className="mr-2" /> Stop Recording</Button></div>)}
             </CardContent>
         </Card>
     );
 }
-
 function ComprehensionStage({ stories, onComplete }: { stories: any[], onComplete: (data: any[]) => void }) {
     const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [status, setStatus] = useState("idle");
     const [selectedOption, setSelectedOption] = useState<string | null>(null);
     const [comprehensionResults, setComprehensionResults] = useState<any[]>([]);
-
     const currentStory = stories[currentStoryIndex];
     const currentQuestion = currentStory.questions[currentQuestionIndex];
-
     const handlePlayStory = () => {
         setStatus("playing");
         const audio = new Audio(currentStory.storyAudioUrl);
         audio.play().catch(() => setStatus("idle"));
         audio.onended = () => setStatus("answering");
     };
-
     const handleSelectAnswer = (option: string) => {
         if (selectedOption) return;
         setSelectedOption(option);
         const isCorrect = option === currentQuestion.correctAnswer;
-        
         setTimeout(() => {
             const updatedResults = [...comprehensionResults, { question: currentQuestion.question, isCorrect }];
             setComprehensionResults(updatedResults);
             setSelectedOption(null);
-
             const isLastQuestionInStory = currentQuestionIndex === currentStory.questions.length - 1;
             const isLastStory = currentStoryIndex === stories.length - 1;
-
             if (isLastQuestionInStory) {
-                if (isLastStory) {
-                    onComplete(updatedResults);
-                } else {
+                if (isLastStory) onComplete(updatedResults);
+                else {
                     setCurrentStoryIndex(prev => prev + 1);
                     setCurrentQuestionIndex(0);
                     setStatus("idle");
@@ -212,74 +171,35 @@ function ComprehensionStage({ stories, onComplete }: { stories: any[], onComplet
             }
         }, 1200);
     };
-
     return (
         <Card className="max-w-3xl mx-auto text-center shadow-xl">
-            <CardHeader>
-                <CardTitle>Stage 3: Comprehension (Story {currentStoryIndex + 1}/{stories.length})</CardTitle>
-                <CardDescription>{status === "answering" ? `Question ${currentQuestionIndex + 1} of ${currentStory.questions.length}` : "Listen to the story, then answer the questions."}</CardDescription>
-            </CardHeader>
+            <CardHeader><CardTitle>Stage 3: Comprehension (Story {currentStoryIndex + 1}/{stories.length})</CardTitle><CardDescription>{status === "answering" ? `Question ${currentQuestionIndex + 1} of ${currentStory.questions.length}` : "Listen to the story, then answer the questions."}</CardDescription></CardHeader>
             <CardContent className="min-h-[250px] flex flex-col justify-center items-center">
                 {status === "idle" && <Button size="lg" onClick={handlePlayStory}><Play className="mr-2" /> Play Story {currentStoryIndex + 1}</Button>}
                 {status === "playing" && <p className="text-blue-500 font-semibold animate-pulse">🔊 Playing story...</p>}
-                {status === "answering" && (
-                    <div className="w-full text-left">
-                        <h3 className="text-xl font-semibold mb-6 text-center">{currentQuestion.question}</h3>
-                        <div className="space-y-3">
-                            {currentQuestion.options.map((option: string) => {
-                                const isSelected = selectedOption === option;
-                                const isCorrect = isSelected && option === currentQuestion.correctAnswer;
-                                return (
-                                    <button key={option} onClick={() => handleSelectAnswer(option)} disabled={!!selectedOption}
-                                        className={`w-full p-4 rounded-lg border-2 flex items-center justify-between transition-all duration-300 ${isCorrect ? "border-green-500 bg-green-100 dark:bg-green-900/50" : ""} ${isSelected && !isCorrect ? "border-red-500 bg-red-100 dark:bg-red-900/50" : ""} ${!isSelected ? "hover:border-blue-500 dark:hover:border-blue-400" : ""}`}>
-                                        <span className="font-medium">{option}</span>
-                                        {isSelected && (isCorrect ? <CheckCircle className="text-green-500" /> : <XCircle className="text-red-500" />)}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
+                {status === "answering" && (<div className="w-full text-left"><h3 className="text-xl font-semibold mb-6 text-center">{currentQuestion.question}</h3><div className="space-y-3">{currentQuestion.options.map((option: string) => { const isSelected = selectedOption === option; const isCorrect = isSelected && option === currentQuestion.correctAnswer; return (<button key={option} onClick={() => handleSelectAnswer(option)} disabled={!!selectedOption} className={`w-full p-4 rounded-lg border-2 flex items-center justify-between transition-all duration-300 ${isCorrect ? "border-green-500 bg-green-100 dark:bg-green-900/50" : ""} ${isSelected && !isCorrect ? "border-red-500 bg-red-100 dark:bg-red-900/50" : ""} ${!isSelected ? "hover:border-blue-500 dark:hover:border-blue-400" : ""}`}><span className="font-medium">{option}</span>{isSelected && (isCorrect ? <CheckCircle className="text-green-500" /> : <XCircle className="text-red-500" />)}</button>); })}</div></div>)}
             </CardContent>
         </Card>
     );
 }
-
 function SubmitStage({ onSubmit, isSubmitting }: { onSubmit: () => void; isSubmitting: boolean; }) {
     return (
         <Card className="max-w-3xl mx-auto text-center shadow-xl">
-            <CardHeader>
-                <CardTitle>All Stages Complete!</CardTitle>
-                <CardDescription>You have completed all the exercises. Click the button below to submit your session for analysis.</CardDescription>
-            </CardHeader>
+            <CardHeader><CardTitle>All Stages Complete!</CardTitle><CardDescription>You have completed all the exercises. Click the button below to submit your session for analysis.</CardDescription></CardHeader>
             <CardContent className="py-12 flex flex-col items-center">
-                <Button size="lg" onClick={onSubmit} disabled={isSubmitting}>
-                    {isSubmitting ? (
-                        <>
-                            <LoadingSpinner className="mr-2 h-5 w-5" /> Submitting...
-                        </>
-                    ) : (
-                        <>
-                            <Send className="mr-2 h-5 w-5" /> Submit for Analysis
-                        </>
-                    )}
-                </Button>
+                <Button size="lg" onClick={onSubmit} disabled={isSubmitting}>{isSubmitting ? (<><LoadingSpinner className="mr-2 h-5 w-5" /> Submitting...</>) : (<><Send className="mr-2 h-5 w-5" /> Submit for Analysis</>)}</Button>
                 {isSubmitting && <p className="text-sm text-slate-500 mt-4">Please wait, preparing your results...</p>}
             </CardContent>
         </Card>
     );
 }
-
 function AnalysisPollingStage({ sessionId, onAnalysisComplete }: { sessionId: string, onAnalysisComplete: (analysis: any) => void }) {
     const [error, setError] = useState<string | null>(null);
-
     useEffect(() => {
         const interval = setInterval(async () => {
             try {
                 const response = await fetch(`/api/session-result?sessionId=${sessionId}`);
-                if (!response.ok) {
-                    throw new Error("Network response was not ok");
-                }
+                if (!response.ok) throw new Error("Network response was not ok");
                 const result = await response.json();
                 if (result && result.feedback) {
                     clearInterval(interval);
@@ -291,47 +211,28 @@ function AnalysisPollingStage({ sessionId, onAnalysisComplete }: { sessionId: st
                 console.error(err);
             }
         }, 5000);
-
         return () => clearInterval(interval);
     }, [sessionId, onAnalysisComplete]);
-
     if (error) {
-        return (
-            <Card className="max-w-3xl mx-auto text-center">
-                <CardHeader><CardTitle className="text-red-500">Error</CardTitle></CardHeader>
-                <CardContent><p className="text-red-500">{error}</p></CardContent>
-            </Card>
-        );
+        return (<Card className="max-w-3xl mx-auto text-center"><CardHeader><CardTitle className="text-red-500">Error</CardTitle></CardHeader><CardContent><p className="text-red-500">{error}</p></CardContent></Card>);
     }
-
     return (
         <Card className="max-w-3xl mx-auto text-center">
-            <CardContent className="py-12 flex flex-col items-center">
-                <LoadingSpinner />
-                <p className="mt-4 font-semibold text-lg">Analyzing your session...</p>
-                <p className="text-sm text-slate-500">This may take a moment. We'll show your results here as soon as they're ready.</p>
-            </CardContent>
+            <CardContent className="py-12 flex flex-col items-center"><LoadingSpinner /><p className="mt-4 font-semibold text-lg">Analyzing your session...</p><p className="text-sm text-slate-500">This may take a moment. We'll show your results here as soon as they're ready.</p></CardContent>
         </Card>
     );
 }
-
 function ResultsDisplayStage({ analysis, onComplete }: { analysis: any, onComplete: () => void }) {
     if (!analysis || !analysis.scores) {
         return <Card className="max-w-3xl mx-auto text-center"><CardContent className="py-12"><p>Could not load analysis results.</p></CardContent></Card>;
     }
-    
     const readingScore = Math.round(analysis.scores.reading);
     const repetitionScore = Math.round(analysis.scores.repetition);
     const comprehensionScore = Math.round(analysis.scores.comprehension);
     const overallScore = Math.round((readingScore + repetitionScore + comprehensionScore) / 3);
-
     return (
         <Card className="max-w-3xl mx-auto text-center">
-            <CardHeader>
-                <Award className="mx-auto h-12 w-12 text-yellow-500" />
-                <CardTitle className="mt-4">Practice Complete!</CardTitle>
-                <CardDescription>Here is your performance summary.</CardDescription>
-            </CardHeader>
+            <CardHeader><Award className="mx-auto h-12 w-12 text-yellow-500" /><CardTitle className="mt-4">Practice Complete!</CardTitle><CardDescription>Here is your performance summary.</CardDescription></CardHeader>
             <CardContent>
                 <p className="text-6xl font-bold text-blue-500">{overallScore}<span className="text-3xl text-slate-400">/100</span></p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
@@ -345,9 +246,12 @@ function ResultsDisplayStage({ analysis, onComplete }: { analysis: any, onComple
     );
 }
 
-
 // --- Main Page Component ---
 export default function CommunicationPracticePage() {
+    // === NEW STATE ===
+    const [uploadedFiles, setUploadedFiles] = useState<{ reading: any[], repetition: any[] }>({ reading: [], repetition: [] });
+    
+    // Existing state...
     const [stage, setStage] = useState<"ready" | "loading" | "reading" | "repetition" | "comprehension" | "finished" | "polling" | "summary">("ready");
     const [results, setResults] = useState<{ reading: any[], repetition: any[], comprehension: any[] }>({ reading: [], repetition: [], comprehension: [] });
     const [isLoading, setIsLoading] = useState(false);
@@ -358,8 +262,34 @@ export default function CommunicationPracticePage() {
     const [finalAnalysis, setFinalAnalysis] = useState<any>(null);
     const router = useRouter();
     const { user } = useUser();
+    const { getToken } = useAuth();
 
-    // useEffect hooks remain the same...
+    // === NEW UPLOAD HELPER FUNCTION ===
+    const uploadAudioBatch = async (stageName: 'reading' | 'repetition', audioData: { audioBlob: Blob, originalText: string }[]) => {
+        const supabaseToken = await getToken({ template: 'supabase' });
+        if (!supabaseToken || !user) {
+            throw new Error("User authentication failed.");
+        }
+
+        const userSupabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            { global: { headers: { Authorization: `Bearer ${supabaseToken}` } } }
+        );
+
+        const uploadPromises = audioData.map((item, index) => {
+            const filePath = `${user.id}/${stageName}_${Date.now()}_${index}.webm`;
+            return userSupabase.storage.from('audio-uploads').upload(filePath, item.audioBlob)
+                .then(result => {
+                    if (result.error) throw result.error;
+                    return { path: result.data.path, originalText: item.originalText };
+                });
+        });
+
+        return await Promise.all(uploadPromises);
+    };
+
+    // --- useEffect hooks (No Changes) ---
     useEffect(() => {
         const handleFullscreenChange = () => {
             const isFullscreen = document.fullscreenElement != null;
@@ -408,6 +338,8 @@ export default function CommunicationPracticePage() {
     }, [stage]);
 
 
+    // --- Core Logic Handlers (UPDATED) ---
+
     const handleStartSession = () => {
         document.documentElement.requestFullscreen().catch(err => {
             console.error(`Error attempting to enable full-screen mode: ${err.message}`);
@@ -415,18 +347,35 @@ export default function CommunicationPracticePage() {
         setStage("loading");
     };
 
-    // --- REVERTED TO SIMPLE STAGE COMPLETION ---
-    const handleStageComplete = (stageName: string, data: any[]) => {
+    // === REFACTORED handleStageComplete ===
+    const handleStageComplete = async (stageName: 'reading' | 'repetition' | 'comprehension', data: any[]) => {
         const newResults = { ...results, [stageName]: data };
         setResults(newResults);
-        if (stageName === "reading") setStage("repetition");
-        else if (stageName === "repetition") setStage("comprehension");
-        else if (stageName === "comprehension") {
+
+        if (stageName === 'reading' || stageName === 'repetition') {
+            setIsLoading(true); 
+            try {
+                console.log(`Uploading ${stageName} audio...`);
+                const uploadedData = await uploadAudioBatch(stageName, data);
+                setUploadedFiles(prev => ({ ...prev, [stageName]: uploadedData }));
+                console.log(`${stageName} audio uploaded successfully.`);
+                
+                if (stageName === "reading") setStage("repetition");
+                if (stageName === "repetition") setStage("comprehension");
+
+            } catch (error) {
+                console.error(`Failed to upload ${stageName} audio:`, error);
+                alert(`There was an error saving your ${stageName} recordings. Please try again or restart the session.`);
+                router.push('/dashboard');
+            } finally {
+                setIsLoading(false);
+            }
+        } else if (stageName === "comprehension") {
             setStage("finished");
         }
     };
 
-    // --- REVERTED TO SERVER-SIDE UPLOAD LOGIC ---
+    // === REFACTORED handleSubmitForAnalysis ===
     const handleSubmitForAnalysis = async () => {
         if (isSubmitting || !user) {
             if (!user) alert("User data not loaded. Please wait a moment.");
@@ -440,19 +389,26 @@ export default function CommunicationPracticePage() {
             ...user.unsafeMetadata,
         };
 
-        try {
-            const formData = new FormData();
-            formData.append('results', JSON.stringify(results));
-            formData.append('userProfile', JSON.stringify(userProfile));
+        const finalPayload = {
+            userId: user.id,
+            userProfile,
+            allResults: {
+                comprehension: results.comprehension
+            },
+            readingAudio: uploadedFiles.reading,
+            repetitionAudio: uploadedFiles.repetition,
+        };
 
-            results.reading.forEach((r: any, i: number) => formData.append(`reading_audio_${i}`, r.audioBlob));
-            results.repetition.forEach((r: any, i: number) => formData.append(`repetition_audio_${i}`, r.audioBlob));
-            
-            const response = await fetch('/api/analyze', { method: 'POST', body: formData });
+        try {
+            const response = await fetch('/api/analyze', { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(finalPayload) 
+            });
             
             if (response.status !== 202) {
-                const errorText = await response.text();
-                throw new Error(errorText || "Failed to start analysis job.");
+                const errorData = await response.json();
+                throw new Error(errorData.message || "Failed to start analysis job.");
             }
             
             const { jobId } = await response.json();
@@ -474,12 +430,14 @@ export default function CommunicationPracticePage() {
         if (document.fullscreenElement) document.exitFullscreen();
         router.push(`/feedback/${sessionId}`);
     };
-
+    
+    // --- Render Logic ---
+    
     if (isLoading) {
-        return <div className="flex h-screen items-center justify-center"><LoadingSpinner /><p className="ml-4 text-lg">Loading...</p></div>;
+        return <div className="flex h-screen items-center justify-center"><LoadingSpinner /><p className="ml-4 text-lg">Saving progress...</p></div>;
     }
-
-    if (stage !== 'ready' && !practiceSet) {
+    
+    if (stage === 'loading' || (stage !== 'ready' && !practiceSet)) {
         return <div className="flex h-screen items-center justify-center"><LoadingSpinner /><p className="ml-4 text-lg">Preparing exercises...</p></div>;
     }
 
