@@ -2,61 +2,42 @@
 
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
-import { google } from 'googleapis';
-import { Readable } from 'stream';
-import { analysisQueue } from '@/lib/queue'; // Assuming your queue is in lib
+import { createClient } from '@supabase/supabase-js';
+import { analysisQueue } from '@/lib/queue';
 
-// --- HELPER FUNCTION FOR GOOGLE DRIVE UPLOAD ---
-async function uploadToGoogleDrive(file: File, userId: string, fileName: string) {
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_CLIENT_EMAIL,
-      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/drive'],
-  });
+// Initialize the Supabase client for server-side operations
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_KEY! // Use the Service Key for backend access
+);
 
-  const drive = google.drive({ version: 'v3', auth });
+// --- HELPER FUNCTION FOR SUPABASE UPLOAD ---
+async function uploadToSupabase(file: File, userId: string, fileName: string) {
+    // Create a unique path for the file in the bucket
+    const filePath = `${userId}/${fileName}`;
 
-  const fileBuffer = Buffer.from(await file.arrayBuffer());
-  const fileStream = Readable.from(fileBuffer);
+    // Upload the file to the 'audio-uploads' bucket
+    const { error: uploadError } = await supabase.storage
+        .from('audio-uploads')
+        .upload(filePath, file);
 
-  const response = await drive.files.create({
-    requestBody: {
-      name: fileName,
-      parents: [process.env.GOOGLE_DRIVE_FOLDER_ID!],
-    },
-    media: {
-      mimeType: file.type,
-      body: fileStream,
-    },
-    fields: 'id',
-  });
+    if (uploadError) {
+        throw new Error(`Supabase upload failed: ${uploadError.message}`);
+    }
 
-  const fileId = response.data.id;
-  if (!fileId) {
-    throw new Error(`Upload failed for ${fileName}`);
-  }
+    // Get the public URL for the newly uploaded file
+    const { data } = supabase.storage
+        .from('audio-uploads')
+        .getPublicUrl(filePath);
+    
+    if (!data || !data.publicUrl) {
+        throw new Error('Could not get public URL from Supabase.');
+    }
 
-  await drive.permissions.create({
-    fileId: fileId,
-    requestBody: { role: 'reader', type: 'anyone' },
-  });
-
-  const fileMetadata = await drive.files.get({
-    fileId: fileId,
-    fields: 'webContentLink',
-  });
-
-  const publicUrl = fileMetadata.data.webContentLink;
-  if (!publicUrl) {
-    throw new Error(`Could not get public URL for ${fileName}`);
-  }
-
-  return { fileId, publicUrl };
+    // Return both the public URL and the file path for later deletion
+    return { publicUrl: data.publicUrl, filePath };
 }
-// -------------------------------------------------
-
+// -------------------------------------------
 
 export async function POST(request: Request) {
     const user = await currentUser();
@@ -80,24 +61,23 @@ export async function POST(request: Request) {
             userId: user.id, 
             allResults,
             userProfile,
-            // These will be populated by the uploads
             readingAudio: [], 
             repetitionAudio: [] 
         };
 
         const uploadPromises: Promise<any>[] = [];
 
-        // --- NEW GOOGLE DRIVE UPLOAD LOGIC ---
+        // --- NEW SUPABASE UPLOAD LOGIC ---
         allResults.reading.forEach((item: any, i: number) => {
             const file = formData.get(`reading_audio_${i}`);
             
             if (file instanceof File && file.size > 0) {
-                const filename = `reading_${user.id}_${Date.now()}_${i}.webm`;
+                const filename = `reading_${Date.now()}_${i}.webm`;
                 uploadPromises.push(
-                    uploadToGoogleDrive(file, user.id, filename).then(driveFile => {
+                    uploadToSupabase(file, user.id, filename).then(supaFile => {
                         jobPayload.readingAudio[i] = { 
-                            url: driveFile.publicUrl, 
-                            fileId: driveFile.fileId, // Pass fileId for deletion
+                            url: supaFile.publicUrl, 
+                            path: supaFile.filePath, // Pass filePath for deletion
                             originalText: item.originalText 
                         };
                     })
@@ -109,12 +89,12 @@ export async function POST(request: Request) {
             const file = formData.get(`repetition_audio_${i}`);
 
             if (file instanceof File && file.size > 0) {
-                const filename = `repetition_${user.id}_${Date.now()}_${i}.webm`;
+                const filename = `repetition_${Date.now()}_${i}.webm`;
                 uploadPromises.push(
-                    uploadToGoogleDrive(file, user.id, filename).then(driveFile => {
+                    uploadToSupabase(file, user.id, filename).then(supaFile => {
                         jobPayload.repetitionAudio[i] = { 
-                            url: driveFile.publicUrl, 
-                            fileId: driveFile.fileId, // Pass fileId for deletion
+                            url: supaFile.publicUrl, 
+                            path: supaFile.filePath, // Pass filePath for deletion
                             originalText: item.originalText 
                         };
                     })
@@ -130,7 +110,6 @@ export async function POST(request: Request) {
 
     } catch (error: any) {
         console.error("Error in /api/analyze route:", error);
-        const errorMessage = error.message || "Failed to start analysis.";
-        return new NextResponse(errorMessage, { status: 500 });
+        return new NextResponse(error.message, { status: 500 });
     }
 }

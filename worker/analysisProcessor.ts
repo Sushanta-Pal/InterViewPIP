@@ -4,10 +4,9 @@ import { Job } from 'bullmq';
 import { geminiKeyManager, deepgramKeyManager } from '../lib/apiKeyManager';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
-import { google } from 'googleapis'; // Import the googleapis library
 import type { Session } from '@/lib/types';
 
-// Initialize Supabase
+// Initialize Supabase Client
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!, 
     process.env.SUPABASE_SERVICE_KEY!
@@ -152,17 +151,16 @@ export default async function (job: Job) {
         console.error(`Job ${job.id} failed:`, error.message);
         throw error; // Re-throw the error to let BullMQ know the job failed
     } finally {
-        // --- NEW: GOOGLE DRIVE CLEANUP LOGIC ---
-        // This block runs whether the job succeeds or fails, ensuring cleanup.
-        console.log(`[Job ${job.id}] Starting Google Drive cleanup...`);
+          // --- NEW: SUPABASE STORAGE CLEANUP LOGIC ---
+        console.log(`[Job ${job.id}] Starting Supabase Storage cleanup...`);
 
-        // Collect all file IDs from the job data
-        const fileIdsToDelete = [
-            ...readingAudio.map((item: any) => item?.fileId),
-            ...repetitionAudio.map((item: any) => item?.fileId)
-        ].filter(id => id); // Filter out any null/undefined entries
+        // Collect all file paths from the job data
+        const filePathsToDelete = [
+            ...readingAudio.map((item: any) => item?.path),
+            ...repetitionAudio.map((item: any) => item?.path)
+        ].filter(path => path); // Filter out any null/undefined entries
 
-        if (fileIdsToDelete.length > 0) {
+        if (filePathsToDelete.length > 0) {
             
             // =================================================================
             // === IMPORTANT: For testing, the delete logic is commented out. ===
@@ -170,33 +168,25 @@ export default async function (job: Job) {
             // =================================================================
             /*
             try {
-                const auth = new google.auth.GoogleAuth({
-                    credentials: {
-                        client_email: process.env.GOOGLE_CLIENT_EMAIL,
-                        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-                    },
-                    scopes: ['https://www.googleapis.com/auth/drive'],
-                });
-                const drive = google.drive({ version: 'v3', auth });
+                const { error: removeError } = await supabase.storage
+                    .from('audio-uploads') // Use your bucket name
+                    .remove(filePathsToDelete);
 
-                // Create a promise for each deletion
-                const deletionPromises = fileIdsToDelete.map(fileId => {
-                    console.log(`[Job ${job.id}] Deleting file: ${fileId}`);
-                    return drive.files.delete({ fileId });
-                });
+                if (removeError) {
+                    throw removeError;
+                }
 
-                await Promise.all(deletionPromises);
-                console.log(`[Job ${job.id}] Successfully deleted ${fileIdsToDelete.length} files from Google Drive.`);
+                console.log(`[Job ${job.id}] Successfully deleted ${filePathsToDelete.length} files from Supabase Storage.`);
 
             } catch (cleanupError: any) {
-                console.error(`[Job ${job.id}] FAILED to delete files from Google Drive:`, cleanupError.message);
+                console.error(`[Job ${job.id}] FAILED to delete files from Supabase Storage:`, cleanupError.message);
             }
             */
             // =================================================================
             
-            console.log(`[Job ${job.id}] TEST MODE: Would have deleted ${fileIdsToDelete.length} files. Cleanup logic is commented out.`);
+            console.log(`[Job ${job.id}] TEST MODE: Would have deleted ${filePathsToDelete.length} files. Cleanup logic is commented out.`);
         } else {
-            console.log(`[Job ${job.id}] No files to delete.`);
+            console.log(`[Job ${job.id}] No files to delete from Supabase Storage.`);
         }
     }
 }
