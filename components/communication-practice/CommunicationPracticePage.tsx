@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import LoadingSpinner from "@/components/common/LoadingSpinner";
 import { Mic, Play, CheckCircle, XCircle, ArrowRight, Volume2, Award, BookOpen, Repeat, Puzzle, Expand, MicOff, AlertTriangle, Send } from "lucide-react";
 
-// --- UI Components (No Changes Needed Here) ---
+// --- UI Components (No Changes) ---
 
 const WarningMessage = () => (
     <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-md flex items-center" role="alert">
@@ -50,10 +50,10 @@ const ProgressStepper = ({ currentStage }: { currentStage: string }) => {
     );
 };
 
-// --- Stage Components (No Changes Needed Here) ---
+
+// --- Stage Components (No Changes) ---
 
 function ReadingStage({ paragraphs, onComplete }: { paragraphs: string[], onComplete: (data: any[]) => void }) {
-    // ... no changes needed in this component's logic
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isRecording, setIsRecording] = useState(false);
     const [readingResults, setReadingResults] = useState<any[]>([]);
@@ -114,8 +114,8 @@ function ReadingStage({ paragraphs, onComplete }: { paragraphs: string[], onComp
         </Card>
     );
 }
+
 function RepetitionStage({ tasks, onComplete }: { tasks: any[], onComplete: (data: any[]) => void }) {
-    // ... no changes needed in this component's logic
     const [currentIndex, setCurrentIndex] = useState(0);
     const [status, setStatus] = useState<"idle" | "playing" | "ready_to_record" | "recording">("idle");
     const [repetitionResults, setRepetitionResults] = useState<any[]>([]);
@@ -183,8 +183,8 @@ function RepetitionStage({ tasks, onComplete }: { tasks: any[], onComplete: (dat
         </Card>
     );
 }
+
 function ComprehensionStage({ stories, onComplete }: { stories: any[], onComplete: (data: any[]) => void }) {
-    // ... no changes needed in this component's logic
     const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [status, setStatus] = useState("idle");
@@ -259,8 +259,8 @@ function ComprehensionStage({ stories, onComplete }: { stories: any[], onComplet
         </Card>
     );
 }
+
 function SubmitStage({ onSubmit, isSubmitting }: { onSubmit: () => void; isSubmitting: boolean; }) {
-    // ... no changes needed in this component's logic
     return (
         <Card className="max-w-3xl mx-auto text-center shadow-xl">
             <CardHeader>
@@ -284,8 +284,8 @@ function SubmitStage({ onSubmit, isSubmitting }: { onSubmit: () => void; isSubmi
         </Card>
     );
 }
+
 function AnalysisPollingStage({ sessionId, onAnalysisComplete }: { sessionId: string, onAnalysisComplete: (analysis: any) => void }) {
-    // ... no changes needed in this component's logic
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -329,8 +329,8 @@ function AnalysisPollingStage({ sessionId, onAnalysisComplete }: { sessionId: st
         </Card>
     );
 }
+
 function ResultsDisplayStage({ analysis, onComplete }: { analysis: any, onComplete: () => void }) {
-    // ... no changes needed in this component's logic
     if (!analysis || !analysis.scores) {
         return <Card className="max-w-3xl mx-auto text-center"><CardContent className="py-12"><p>Could not load analysis results.</p></CardContent></Card>;
     }
@@ -359,6 +359,7 @@ function ResultsDisplayStage({ analysis, onComplete }: { analysis: any, onComple
         </Card>
     );
 }
+
 
 // --- Main Page Component ---
 export default function CommunicationPracticePage() {
@@ -396,6 +397,7 @@ export default function CommunicationPracticePage() {
             return userSupabase.storage.from('audio-uploads').upload(filePath, item.audioBlob)
                 .then(result => {
                     if (result.error) throw result.error;
+                    // Return the path and original text for the job payload
                     return { path: result.data.path, originalText: item.originalText };
                 });
         });
@@ -403,7 +405,7 @@ export default function CommunicationPracticePage() {
         return await Promise.all(uploadPromises);
     };
 
-    // --- useEffect hooks (No changes needed) ---
+    // --- useEffect hooks (No Changes) ---
     useEffect(() => {
         const handleFullscreenChange = () => {
             const isFullscreen = document.fullscreenElement != null;
@@ -513,8 +515,10 @@ export default function CommunicationPracticePage() {
             userId: user.id,
             userProfile,
             allResults: {
+                // Only send comprehension results from the "results" state
                 comprehension: results.comprehension
             },
+            // Send the uploaded file data from the "uploadedFiles" state
             readingAudio: uploadedFiles.reading,
             repetitionAudio: uploadedFiles.repetition,
         };
@@ -553,12 +557,13 @@ export default function CommunicationPracticePage() {
     };
     
     // --- Render Logic ---
-
+    
+    // NEW: Centralized loading indicator for uploads between stages
     if (isLoading) {
         return <div className="flex h-screen items-center justify-center"><LoadingSpinner /><p className="ml-4 text-lg">Saving progress...</p></div>;
     }
     
-    if (stage !== 'ready' && stage !== 'summary' && !practiceSet) {
+    if (stage === 'loading' || (stage !== 'ready' && !practiceSet)) {
         return <div className="flex h-screen items-center justify-center"><LoadingSpinner /><p className="ml-4 text-lg">Preparing exercises...</p></div>;
     }
 
