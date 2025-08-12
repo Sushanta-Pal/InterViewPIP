@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
+import { useUser, useAuth } from "@clerk/nextjs"; // Import useAuth
+import { createClient } from '@supabase/supabase-js'; // Import Supabase client
 import { Button } from "@/components/common/Button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/common/Card";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
 import { Mic, Play, CheckCircle, XCircle, ArrowRight, Volume2, Award, BookOpen, Repeat, Puzzle, Expand, MicOff, AlertTriangle, Send } from "lucide-react";
 
-// --- UI Components ---
+// --- UI Components (No Changes Needed Here) ---
 
 const WarningMessage = () => (
     <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-md flex items-center" role="alert">
@@ -20,7 +21,6 @@ const WarningMessage = () => (
     </div>
 );
 
-// --- Progress Stepper Component ---
 const ProgressStepper = ({ currentStage }: { currentStage: string }) => {
     const stages = ["reading", "repetition", "comprehension", "finished", "polling", "summary"];
     const stageLabels: { [key: string]: string } = {
@@ -50,9 +50,10 @@ const ProgressStepper = ({ currentStage }: { currentStage: string }) => {
     );
 };
 
+// --- Stage Components (No Changes Needed Here) ---
 
-// --- Stage 1: Reading Aloud ---
 function ReadingStage({ paragraphs, onComplete }: { paragraphs: string[], onComplete: (data: any[]) => void }) {
+    // ... no changes needed in this component's logic
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isRecording, setIsRecording] = useState(false);
     const [readingResults, setReadingResults] = useState<any[]>([]);
@@ -113,9 +114,8 @@ function ReadingStage({ paragraphs, onComplete }: { paragraphs: string[], onComp
         </Card>
     );
 }
-
-// --- Stage 2: Listen & Repeat ---
 function RepetitionStage({ tasks, onComplete }: { tasks: any[], onComplete: (data: any[]) => void }) {
+    // ... no changes needed in this component's logic
     const [currentIndex, setCurrentIndex] = useState(0);
     const [status, setStatus] = useState<"idle" | "playing" | "ready_to_record" | "recording">("idle");
     const [repetitionResults, setRepetitionResults] = useState<any[]>([]);
@@ -183,9 +183,8 @@ function RepetitionStage({ tasks, onComplete }: { tasks: any[], onComplete: (dat
         </Card>
     );
 }
-
-// --- Stage 3: Story Comprehension ---
 function ComprehensionStage({ stories, onComplete }: { stories: any[], onComplete: (data: any[]) => void }) {
+    // ... no changes needed in this component's logic
     const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [status, setStatus] = useState("idle");
@@ -260,9 +259,8 @@ function ComprehensionStage({ stories, onComplete }: { stories: any[], onComplet
         </Card>
     );
 }
-
-// --- Submit for Analysis Stage ---
 function SubmitStage({ onSubmit, isSubmitting }: { onSubmit: () => void; isSubmitting: boolean; }) {
+    // ... no changes needed in this component's logic
     return (
         <Card className="max-w-3xl mx-auto text-center shadow-xl">
             <CardHeader>
@@ -286,10 +284,8 @@ function SubmitStage({ onSubmit, isSubmitting }: { onSubmit: () => void; isSubmi
         </Card>
     );
 }
-
-
-// --- Polling Component ---
 function AnalysisPollingStage({ sessionId, onAnalysisComplete }: { sessionId: string, onAnalysisComplete: (analysis: any) => void }) {
+    // ... no changes needed in this component's logic
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -333,9 +329,8 @@ function AnalysisPollingStage({ sessionId, onAnalysisComplete }: { sessionId: st
         </Card>
     );
 }
-
-// --- Results Display Component ---
 function ResultsDisplayStage({ analysis, onComplete }: { analysis: any, onComplete: () => void }) {
+    // ... no changes needed in this component's logic
     if (!analysis || !analysis.scores) {
         return <Card className="max-w-3xl mx-auto text-center"><CardContent className="py-12"><p>Could not load analysis results.</p></CardContent></Card>;
     }
@@ -365,9 +360,12 @@ function ResultsDisplayStage({ analysis, onComplete }: { analysis: any, onComple
     );
 }
 
-
 // --- Main Page Component ---
 export default function CommunicationPracticePage() {
+    // === NEW STATE ===
+    const [uploadedFiles, setUploadedFiles] = useState<{ reading: any[], repetition: any[] }>({ reading: [], repetition: [] });
+    
+    // Existing state...
     const [stage, setStage] = useState<"ready" | "loading" | "reading" | "repetition" | "comprehension" | "finished" | "polling" | "summary">("ready");
     const [results, setResults] = useState<{ reading: any[], repetition: any[], comprehension: any[] }>({ reading: [], repetition: [], comprehension: [] });
     const [isLoading, setIsLoading] = useState(false);
@@ -378,7 +376,34 @@ export default function CommunicationPracticePage() {
     const [finalAnalysis, setFinalAnalysis] = useState<any>(null);
     const router = useRouter();
     const { user } = useUser();
+    const { getToken } = useAuth(); // NEW: Get the useAuth hook
 
+    // === NEW UPLOAD HELPER FUNCTION ===
+    const uploadAudioBatch = async (stageName: 'reading' | 'repetition', audioData: { audioBlob: Blob, originalText: string }[]) => {
+        const supabaseToken = await getToken({ template: 'supabase' });
+        if (!supabaseToken || !user) {
+            throw new Error("User authentication failed.");
+        }
+
+        const userSupabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            { global: { headers: { Authorization: `Bearer ${supabaseToken}` } } }
+        );
+
+        const uploadPromises = audioData.map((item, index) => {
+            const filePath = `${user.id}/${stageName}_${Date.now()}_${index}.webm`;
+            return userSupabase.storage.from('audio-uploads').upload(filePath, item.audioBlob)
+                .then(result => {
+                    if (result.error) throw result.error;
+                    return { path: result.data.path, originalText: item.originalText };
+                });
+        });
+
+        return await Promise.all(uploadPromises);
+    };
+
+    // --- useEffect hooks (No changes needed) ---
     useEffect(() => {
         const handleFullscreenChange = () => {
             const isFullscreen = document.fullscreenElement != null;
@@ -426,6 +451,9 @@ export default function CommunicationPracticePage() {
         };
     }, [stage]);
 
+
+    // --- Core Logic Handlers (UPDATED) ---
+
     const handleStartSession = () => {
         document.documentElement.requestFullscreen().catch(err => {
             console.error(`Error attempting to enable full-screen mode: ${err.message}`);
@@ -433,16 +461,40 @@ export default function CommunicationPracticePage() {
         setStage("loading");
     };
 
-    const handleStageComplete = (stageName: string, data: any[]) => {
+    // === REFACTORED handleStageComplete ===
+    const handleStageComplete = async (stageName: 'reading' | 'repetition' | 'comprehension', data: any[]) => {
+        // 1. Save the raw results with blobs to state
         const newResults = { ...results, [stageName]: data };
         setResults(newResults);
-        if (stageName === "reading") setStage("repetition");
-        else if (stageName === "repetition") setStage("comprehension");
-        else if (stageName === "comprehension") {
+
+        // 2. If it's an audio stage, upload the recordings immediately
+        if (stageName === 'reading' || stageName === 'repetition') {
+            setIsLoading(true); // Show a loading indicator between stages
+            try {
+                console.log(`Uploading ${stageName} audio...`);
+                const uploadedData = await uploadAudioBatch(stageName, data);
+                // Store the file paths returned from Supabase
+                setUploadedFiles(prev => ({ ...prev, [stageName]: uploadedData }));
+                console.log(`${stageName} audio uploaded successfully.`);
+                
+                // Move to the next stage
+                if (stageName === "reading") setStage("repetition");
+                if (stageName === "repetition") setStage("comprehension");
+
+            } catch (error) {
+                console.error(`Failed to upload ${stageName} audio:`, error);
+                alert(`There was an error saving your ${stageName} recordings. Please try again or restart the session.`);
+                router.push('/dashboard');
+            } finally {
+                setIsLoading(false);
+            }
+        } else if (stageName === "comprehension") {
+            // For comprehension, no upload is needed, just proceed
             setStage("finished");
         }
     };
 
+    // === REFACTORED handleSubmitForAnalysis ===
     const handleSubmitForAnalysis = async () => {
         if (isSubmitting || !user) {
             if (!user) alert("User data not loaded. Please wait a moment.");
@@ -456,24 +508,36 @@ export default function CommunicationPracticePage() {
             ...user.unsafeMetadata,
         };
 
-        try {
-            const formData = new FormData();
-            formData.append('results', JSON.stringify(results));
-            formData.append('userProfile', JSON.stringify(userProfile));
+        // Construct the final payload with pre-uploaded file paths
+        const finalPayload = {
+            userId: user.id,
+            userProfile,
+            allResults: {
+                comprehension: results.comprehension
+            },
+            readingAudio: uploadedFiles.reading,
+            repetitionAudio: uploadedFiles.repetition,
+        };
 
-            results.reading.forEach((r: any, i: number) => formData.append(`reading_audio_${i}`, r.audioBlob));
-            results.repetition.forEach((r: any, i: number) => formData.append(`repetition_audio_${i}`, r.audioBlob));
+        try {
+            // Send the clean JSON data to the backend
+            const response = await fetch('/api/analyze', { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(finalPayload) 
+            });
             
-            const response = await fetch('/api/analyze', { method: 'POST', body: formData });
-            
-            if (response.status !== 202) throw new Error("Failed to start analysis job.");
+            if (response.status !== 202) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || "Failed to start analysis job.");
+            }
             
             const { jobId } = await response.json();
             setSessionId(jobId);
             setStage('polling');
         } catch (err: any) {
             console.error("Error submitting for analysis:", err);
-            alert("There was an error submitting your session. Please try again later.");
+            alert(`An error occurred: ${err.message}`);
             setIsSubmitting(false);
         }
     };
@@ -487,11 +551,15 @@ export default function CommunicationPracticePage() {
         if (document.fullscreenElement) document.exitFullscreen();
         router.push(`/feedback/${sessionId}`);
     };
+    
+    // --- Render Logic ---
 
-    if (isLoading || (stage !== 'ready' && stage !== 'summary' && !practiceSet)) {
-        if (!practiceSet && stage !== 'ready') {
-             return <div className="flex h-screen items-center justify-center"><LoadingSpinner /><p className="ml-4 text-lg">Preparing exercises...</p></div>;
-        }
+    if (isLoading) {
+        return <div className="flex h-screen items-center justify-center"><LoadingSpinner /><p className="ml-4 text-lg">Saving progress...</p></div>;
+    }
+    
+    if (stage !== 'ready' && stage !== 'summary' && !practiceSet) {
+        return <div className="flex h-screen items-center justify-center"><LoadingSpinner /><p className="ml-4 text-lg">Preparing exercises...</p></div>;
     }
 
     return (
