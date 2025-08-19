@@ -1,9 +1,8 @@
 "use client"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-// UPDATED: Import the 'Variants' type from framer-motion
 import { motion, Variants } from "framer-motion"
-import  {Button}  from "@/components/common/Button"
+import { Button } from "@/components/common/Button"
 import {
     Card,
     CardContent,
@@ -24,9 +23,10 @@ import {
     ChevronRight,
     ClipboardList,
 } from "lucide-react"
-import { UserProfile } from "@/lib/types"
+// 1. Import the correct types from your types file
+import type { DashboardData, Session } from "@/lib/types"
 
-// --- Helper Functions & Components ---
+// --- Helper Functions & Components (Your original code, no changes needed here) ---
 
 const getScoreStyle = (score: number) => {
     if (score >= 90) return { text: 'text-green-500', bg: 'bg-green-500', progress: 'bg-green-500' };
@@ -59,18 +59,19 @@ const StatCard = ({ title, value, icon, description, score }: { title: string; v
 
 // --- Main Dashboard Component ---
 
-export default function DashboardClientPage({ profile }: { profile: UserProfile | null }) {
+// 2. Change the prop from 'profile' to 'initialData' and update its type
+export default function DashboardClientPage({ initialData }: { initialData: DashboardData }) {
     const router = useRouter();
 
     const handleSessionClick = (sessionId: string) => {
         router.push(`/feedback/${sessionId}`);
     };
 
-    const overallScore = Math.round(profile?.overall_average_score ?? 0);
-    const totalSessions = profile?.session_history?.length ?? 0;
-    const sortedHistory = profile?.session_history ? [...profile.session_history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [];
+    // 3. Update variables to use the new 'initialData' prop
+    const overallScore = Math.round(initialData.overall_average ?? 0);
+    const totalSessions = initialData.sessions_completed ?? 0;
+    const sortedHistory = initialData.session_history ? [...initialData.session_history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [];
 
-    // UPDATED: Added the ': Variants' type annotation to fix the TypeScript error.
     const containerVariants: Variants = {
         hidden: { opacity: 0 },
         visible: {
@@ -81,7 +82,6 @@ export default function DashboardClientPage({ profile }: { profile: UserProfile 
         },
     };
 
-    // UPDATED: Added the ': Variants' type annotation here as well.
     const itemVariants: Variants = {
         hidden: { y: 20, opacity: 0 },
         visible: {
@@ -95,7 +95,7 @@ export default function DashboardClientPage({ profile }: { profile: UserProfile 
     };
 
     return (
-        <motion.div 
+        <motion.div
             className="space-y-8 p-4 md:p-8 bg-slate-50 dark:bg-slate-900/50 min-h-screen"
             initial="hidden"
             animate="visible"
@@ -105,7 +105,8 @@ export default function DashboardClientPage({ profile }: { profile: UserProfile 
             <motion.div variants={itemVariants} className="flex flex-wrap justify-between items-center gap-4">
                 <div>
                     <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
-                        Welcome, {profile?.username || 'User'}!
+                        {/* Updated Greeting */}
+                        Welcome Back!
                     </h1>
                     <p className="text-lg text-gray-500 dark:text-gray-400 mt-1">
                         Here's your performance summary. Ready to improve?
@@ -121,13 +122,13 @@ export default function DashboardClientPage({ profile }: { profile: UserProfile 
 
             {/* --- Main Content Grid --- */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                
-                {/* --- Left Column: Stats --- */}
+
+                {/* --- Left Column: Stats (Updated with new data fields) --- */}
                 <motion.div variants={containerVariants} className="lg:col-span-1 space-y-6">
                     <motion.h2 variants={itemVariants} className="text-2xl font-semibold text-slate-800 dark:text-slate-200">At a Glance</motion.h2>
                      <motion.div variants={itemVariants}>
-                        <StatCard 
-                            title="Overall Average" 
+                        <StatCard
+                            title="Overall Average"
                             value={overallScore}
                             score={overallScore}
                             icon={<TrendingUp className="h-5 w-5" />}
@@ -135,43 +136,43 @@ export default function DashboardClientPage({ profile }: { profile: UserProfile 
                         />
                      </motion.div>
                      <motion.div variants={itemVariants}>
-                        <StatCard 
-                            title="Sessions Completed" 
+                        <StatCard
+                            title="Sessions Completed"
                             value={totalSessions}
                             icon={<Target className="h-5 w-5" />}
                             description="Keep up the great work!"
                         />
                      </motion.div>
                      <motion.div variants={itemVariants}>
-                        <StatCard 
-                            title="Avg. Reading" 
-                            value={Math.round(profile?.average_reading_score ?? 0)}
-                            score={profile?.average_reading_score}
+                        <StatCard
+                            title="Avg. Reading"
+                            value={Math.round(initialData.avg_reading ?? 0)}
+                            score={initialData.avg_reading}
                             icon={<BookOpen className="h-5 w-5" />}
                             description="Clarity and pronunciation"
                         />
                     </motion.div>
                     <motion.div variants={itemVariants}>
-                        <StatCard 
-                            title="Avg. Repetition" 
-                            value={Math.round(profile?.average_repeating_score ?? 0)}
-                            score={profile?.average_repeating_score}
+                        <StatCard
+                            title="Avg. Repetition"
+                            value={Math.round(initialData.avg_repetition ?? 0)}
+                            score={initialData.avg_repetition}
                             icon={<Repeat className="h-5 w-5" />}
                             description="Listening and recall"
                         />
                     </motion.div>
                     <motion.div variants={itemVariants}>
-                        <StatCard 
-                            title="Avg. Comprehension" 
-                            value={Math.round(profile?.average_comprehension_score ?? 0)}
-                            score={profile?.average_comprehension_score}
+                        <StatCard
+                            title="Avg. Comprehension"
+                            value={Math.round(initialData.avg_comprehension ?? 0)}
+                            score={initialData.avg_comprehension}
                             icon={<Puzzle className="h-5 w-5" />}
                             description="Understanding and analysis"
                         />
                     </motion.div>
                 </motion.div>
 
-                {/* --- Right Column: Session History --- */}
+                {/* --- Right Column: Session History (Updated to use sortedHistory from new data) --- */}
                 <motion.div variants={itemVariants} className="lg:col-span-2">
                     <Card className="shadow-lg h-full">
                         <CardHeader>
@@ -185,11 +186,11 @@ export default function DashboardClientPage({ profile }: { profile: UserProfile 
                         <CardContent>
                             {sortedHistory.length > 0 ? (
                                 <motion.div variants={containerVariants} className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-                                    {sortedHistory.map((session) => {
+                                    {sortedHistory.map((session: Session) => { // Added Session type
                                         const scoreStyle = getScoreStyle(session.score);
                                         return (
-                                            <motion.div 
-                                                key={session.id} 
+                                            <motion.div
+                                                key={session.id}
                                                 variants={itemVariants}
                                                 whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
                                                 onClick={() => handleSessionClick(session.id)}

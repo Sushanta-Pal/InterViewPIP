@@ -1,54 +1,69 @@
-import { UserProfile } from "@clerk/nextjs";
-import { currentUser } from "@clerk/nextjs/server";
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/common/Card";
 import CustomProfileForm from "./_components/CustomProfileForm";
+import type { UserProfile } from '@/lib/types';
 
 export default async function ProfilePage() {
+    const supabase = createServerComponentClient({ cookies });
+
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session) {
+        redirect('/login');
+    }
+
+    // Fetch the user's profile from the user_details table
+    const { data: profile } = await supabase
+        .from('user_details')
+        .select('*')
+        .eq('email', session.user.email)
+        .single();
     
-  const user = await currentUser();
+    // Prepare the initial data for the form
+    const initialData: UserProfile = {
+        full_name: profile?.full_name || '',
+        university: profile?.university || '',
+        roll_number: profile?.roll_number || '',
+        date_of_birth: profile?.date_of_birth || '',
+        department: profile?.department || '',
+        gender: profile?.gender || '',
+    };
 
-  // CORRECTED: Read all initial data from the metadata object.
-  const initialData = {
-    fullName: user?.unsafeMetadata?.fullName as string || '',
-    university: user?.unsafeMetadata?.university as string || '',
-    roll: user?.unsafeMetadata?.roll as string || '',
-    dob: user?.unsafeMetadata?.dob as string || '',
-    stream: user?.unsafeMetadata?.stream as string || '',
-    gender: user?.unsafeMetadata?.gender as string || '',
-  };
-
-  return (
-    <div className="p-4 md:p-8 space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold">Your Profile</h1>
-        <p className="text-slate-500">
-          Manage your personal information and account settings.
-        </p>
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-1">
-          <Card>
-            <CardHeader>
-              <CardTitle>Personal Information</CardTitle>
-              <CardDescription>Update your custom profile details.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <CustomProfileForm initialData={initialData} />
-            </CardContent>
-          </Card>
+    return (
+        <div className="p-4 md:p-8 space-y-8">
+            <div>
+                <h1 className="text-3xl font-bold">Your Profile</h1>
+                <p className="text-slate-500">
+                    Manage your personal information and account settings.
+                </p>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-1">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Personal Information</CardTitle>
+                            <CardDescription>Update your custom profile details.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <CustomProfileForm initialData={initialData} />
+                        </CardContent>
+                    </Card>
+                </div>
+                <div className="lg:col-span-2">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Account & Security</CardTitle>
+                            <CardDescription>Manage your email and password.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm font-medium">Email: {session.user.email}</p>
+                            <p className="text-sm text-slate-500 mt-4">Feature to update password coming soon.</p>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
         </div>
-        <div className="lg:col-span-2">
-            <Card>
-                <CardHeader>
-                  <CardTitle>Account & Security</CardTitle>
-                  <CardDescription>Manage your name, email, phone, password, and security settings.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <UserProfile routing="hash" /> 
-                </CardContent>
-            </Card>
-        </div>
-      </div>
-    </div>
-  );
+    );
 }

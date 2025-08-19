@@ -4,21 +4,25 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:lan": "next dev -H 0.0.0.0 -p 3000",
     "build": "next build && tsc --project tsconfig.worker.json",
     "start": "next start",
     "worker": "node dist/worker/index.js",
     "dev:worker": "ts-node-dev --respawn worker/index.ts"
   },
   "dependencies": {
-    "@clerk/nextjs": "^5.1.6",
+    "@deepgram/sdk": "^4.11.2",
     "@google/generative-ai": "^0.14.1",
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-progress": "^1.1.7",
     "@radix-ui/react-select": "^2.2.5",
     "@radix-ui/react-separator": "^1.1.7",
     "@radix-ui/react-slot": "^1.2.3",
+    "@stripe/stripe-js": "^7.8.0",
+    "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/supabase-js": "^2.43.5",
     "@vercel/blob": "^1.1.1",
+    "bcryptjs": "^3.0.2",
     "bullmq": "^5.56.9",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -31,10 +35,13 @@
     "react-circular-progressbar": "^2.2.0",
     "react-dom": "^18",
     "react-icons": "^5.5.0",
-    "tailwind-merge": "^3.3.1"
+    "stripe": "^18.4.0",
+    "tailwind-merge": "^3.3.1",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.16",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",

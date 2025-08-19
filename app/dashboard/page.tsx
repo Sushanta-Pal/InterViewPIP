@@ -1,34 +1,44 @@
 // app/dashboard/page.tsx
 
-import { auth } from '@clerk/nextjs/server';
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
 import DashboardClientPage from '@/components/dashboard/DashboardClientPage';
-import type { UserProfile } from '@/lib/types';
-
-// Initialize the Supabase admin client for server-side data fetching
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!
-);
+import type { DashboardData } from '@/lib/types'; // Make sure this type is defined
 
 export default async function DashboardPage() {
-    const { userId } = auth();
-    if (!userId) {
-        redirect('/sign-in');
-    }
+  const supabase = createServerComponentClient({ cookies });
 
-    // --- Fetch the complete user profile in a single query ---
-    const { data: profile, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
+  // 1. Get the current user's session from Supabase
+  const { data: { session } } = await supabase.auth.getSession();
 
-    if (error && error.code !== 'PGRST116') { // Ignore 'not found' error for new users
-        console.error("Error fetching dashboard data:", error);
-    }
+  // 2. If there's no user session, send them to the login page
+  if (!session) {
+    redirect('/login');
+  }
 
-    // The 'profile' object now contains everything the client page needs.
-    return <DashboardClientPage profile={profile as UserProfile | null} />;
+  // 3. Fetch the dashboard data from your 'user_dashboard_data' table
+  const { data, error } = await supabase
+    .from('user_dashboard_data')
+    .select('*')
+    .eq('user_email', session.user.email) // Use the user's email to find their data
+    .single();
+
+  // This handles the case where a brand new user might not have a dashboard entry yet
+  if (error && error.code !== 'PGRST116') { // PGRST116 means 'no rows found', which is okay
+    console.error("Error fetching dashboard data:", error);
+  }
+
+  // 4. Prepare the data for the client component. If no data is found, provide a default object.
+  const dashboardData: DashboardData = data || {
+    overall_average: 0,
+    sessions_completed: 0,
+    avg_reading: 0,
+    avg_repetition: 0,
+    avg_comprehension: 0,
+    session_history: [],
+  };
+
+  // The 'profile' prop in DashboardClientPage might need to be renamed to 'initialData' or similar
+  return <DashboardClientPage initialData={dashboardData} />;
 }

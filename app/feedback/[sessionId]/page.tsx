@@ -1,48 +1,36 @@
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
-import FeedbackClientPage from "@/components/feedback/FeedbackClientPage";
-import { createClient } from '@supabase/supabase-js';
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { notFound } from 'next/navigation';
-import type { Session } from "@/lib/types";
-
-// Initialize the Supabase admin client for server-side fetching
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!
-);
+import FeedbackClientPage from '@/components/feedback/FeedbackClientPage';
+import type { Session } from '@/lib/types';
 
 export default async function FeedbackPage({ params }: { params: { sessionId: string } }) {
-    const { userId } = auth();
-    if (!userId) {
-        redirect('/sign-in');
+    const supabase = createServerComponentClient({ cookies });
+    const { sessionId } = params;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        redirect('/login');
     }
 
-    const { sessionId } = params; // This is the BullMQ job ID
-
-    // Fetch the user's profile to access the session history array
-    const { data: userProfile, error } = await supabase
-        .from('user_profiles')
+    // Fetch the user's entire dashboard data
+    const { data: dashboardData } = await supabase
+        .from('user_dashboard_data')
         .select('session_history')
-        .eq('user_id', userId)
+        .eq('user_email', user.email)
         .single();
-    
-    if (error) {
-        console.error("Error fetching user profile for feedback:", error);
-        return notFound();
-    }
-    
-    // Find the specific session from the user's history array using the ID
-    const sessionData = userProfile?.session_history?.find((s: Session) => s.id === sessionId) || null;
 
-    if (!sessionData) {
-        // This can happen if the session is still being processed or if the ID is invalid
-        console.warn(`Session with ID ${sessionId} not found for user ${userId}`);
+    if (!dashboardData || !dashboardData.session_history) {
         return notFound();
     }
 
-    return (
-        <div className="container mx-auto py-8">
-            <FeedbackClientPage session={sessionData} />
-        </div>
-    );
+    // Find the specific session from the history array
+    const session = (dashboardData.session_history as Session[]).find(s => s.id === sessionId);
+
+    if (!session) {
+        return notFound();
+    }
+
+    return <FeedbackClientPage session={session} />;
 }
