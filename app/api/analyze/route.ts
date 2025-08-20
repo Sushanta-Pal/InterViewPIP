@@ -5,38 +5,31 @@ import { v4 as uuidv4 } from 'uuid';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@deepgram/sdk";
 
-// --- Deepgram Transcription Helper ---
-async function transcribeAudio(audioBase64: string): Promise<string> {
+// --- Deepgram Helper to Transcribe from a URL ---
+async function transcribeAudioFromUrl(audioUrl: string): Promise<string> {
     if (!process.env.DEEPGRAM_API_KEY) {
         throw new Error("Deepgram API key not configured.");
     }
     const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
-    const buffer = Buffer.from(audioBase64.split(',')[1], 'base64');
 
-    const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
-        buffer,
+    const { result, error } = await deepgram.listen.prerecorded.transcribeUrl(
+        { url: audioUrl },
         { model: "nova-2", smart_format: true }
     );
 
     if (error) {
         console.error("Deepgram Transcription Error:", error);
-        throw new Error("Failed to transcribe audio.");
+        throw new Error("Failed to transcribe audio from URL.");
     }
 
     const transcript = result.results.channels[0].alternatives[0].transcript;
-    
-    // --- FIX: Handle Silence ---
-    // If the transcript is empty, return a specific placeholder.
     if (!transcript.trim()) {
-        console.log("Transcription successful: [NO SPEECH DETECTED]");
         return "[NO SPEECH DETECTED]";
     }
-    
-    console.log("Transcription successful:", transcript);
     return transcript;
 }
 
-// --- Gemini Analysis Helper ---
+// --- Gemini Analysis Helper (No changes needed) ---
 async function analyzeTextWithGemini(readingResults: any[], repetitionResults: any[]) {
     if (!process.env.GEMINI_API_KEY) {
         throw new Error("Gemini API key not configured.");
@@ -61,9 +54,7 @@ async function analyzeTextWithGemini(readingResults: any[], repetitionResults: a
         Evaluate the user's performance based on accuracy (how closely they matched the original text).
         Provide a score out of 100 for "Reading" and a score out of 100 for "Repetition".
         Also, provide a brief, encouraging feedback report (2-3 sentences).
-
         IMPORTANT RULE: If the user's speech for a task is "[NO SPEECH DETECTED]", you MUST assign a score of 0 for that task.
-        
         Return your response ONLY as a valid JSON object with the following structure:
         { "scores": { "reading": number, "repetition": number }, "reportText": "string" }
     `;
@@ -83,23 +74,28 @@ export async function POST(req: Request) {
     }
 
     try {
+        // The payload now contains URLs, not base64 strings
         const { readingResults, repetitionResults, comprehensionResults } = await req.json();
 
+        // Transcribe all audio files from their URLs in parallel
         const readingTranscripts = await Promise.all(
             readingResults.map(async (r: any) => ({
                 originalText: r.originalText,
-                transcribedText: await transcribeAudio(r.audioBase64)
+                transcribedText: await transcribeAudioFromUrl(r.audioUrl)
             }))
         );
 
         const repetitionTranscripts = await Promise.all(
             repetitionResults.map(async (r: any) => ({
                 originalText: r.originalText,
-                transcribedText: await transcribeAudio(r.audioBase64)
+                transcribedText: await transcribeAudioFromUrl(r.audioUrl)
             }))
         );
 
+        // Analyze the transcribed text
         const geminiAnalysis = await analyzeTextWithGemini(readingTranscripts, repetitionTranscripts);
+        
+        // Calculate scores for the current session
         const correctComprehension = comprehensionResults.filter((r: any) => r.isCorrect).length;
         const comprehensionScore = comprehensionResults.length > 0 ? (correctComprehension / comprehensionResults.length) * 100 : 0;
         const overallScore = (geminiAnalysis.scores.reading + geminiAnalysis.scores.repetition + comprehensionScore) / 3;
@@ -121,6 +117,7 @@ export async function POST(req: Request) {
             },
         };
 
+        // Fetch the user's existing data
         const { data: currentData } = await supabase
             .from('user_dashboard_data')
             .select('*')
@@ -131,18 +128,25 @@ export async function POST(req: Request) {
         const newHistory = [...oldHistory, newSession];
         const sessionsCompleted = newHistory.length;
 
+        // Recalculate averages from the full history for accuracy
         const totalReading = newHistory.reduce((sum, s) => sum + s.feedback.scores.reading, 0);
         const totalRepetition = newHistory.reduce((sum, s) => sum + s.feedback.scores.repetition, 0);
         const totalComprehension = newHistory.reduce((sum, s) => sum + s.feedback.scores.comprehension, 0);
         const totalOverall = newHistory.reduce((sum, s) => sum + s.score, 0);
 
+        const newAvgReading = totalReading / sessionsCompleted;
+        const newAvgRepetition = totalRepetition / sessionsCompleted;
+        const newAvgComprehension = totalComprehension / sessionsCompleted;
+        const newOverallAverage = totalOverall / sessionsCompleted;
+
+        // Save the updated record to the database
         await supabase.from('user_dashboard_data').upsert({
             user_email: user.email,
             sessions_completed: sessionsCompleted,
-            overall_average: totalOverall / sessionsCompleted,
-            avg_reading: totalReading / sessionsCompleted,
-            avg_repetition: totalRepetition / sessionsCompleted,
-            avg_comprehension: totalComprehension / sessionsCompleted,
+            overall_average: newOverallAverage,
+            avg_reading: newAvgReading,
+            avg_repetition: newAvgRepetition,
+            avg_comprehension: newAvgComprehension,
             session_history: newHistory,
         });
 

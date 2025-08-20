@@ -38,9 +38,9 @@ const ProgressStepper = ({ currentStage }: { currentStage: string }) => {
 };
 
 // --- Type Definitions for Clarity ---
-type AudioResult = {
+type AudioUploadResult = {
     originalText: string;
-    audioBlob: Blob;
+    audioUrl: string; // We now store the URL, not the Blob
 };
 
 type ComprehensionResult = {
@@ -48,21 +48,45 @@ type ComprehensionResult = {
     isCorrect: boolean;
 };
 
-function ReadingStage({ paragraphs, onComplete }: { paragraphs: string[], onComplete: (data: AudioResult[]) => void }) {
+function ReadingStage({ paragraphs, onComplete, user }: { paragraphs: string[], onComplete: (data: AudioUploadResult[]) => void, user: User }) {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isRecording, setIsRecording] = useState(false);
-    const [readingResults, setReadingResults] = useState<AudioResult[]>([]);
+    const [isUploading, setIsUploading] = useState(false);
+    const [readingResults, setReadingResults] = useState<AudioUploadResult[]>([]);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const supabase = createClientComponentClient();
 
-    const handleNext = (audioBlob: Blob) => {
-        const newResult = { originalText: paragraphs[currentIndex], audioBlob };
-        const newResults = [...readingResults, newResult];
-        setReadingResults(newResults);
+    const handleUploadAndNext = async (audioBlob: Blob) => {
+        setIsUploading(true);
+        // The user's ID is used to create a secure folder for their uploads
+        const filePath = `${user.id}/reading_${Date.now()}.webm`;
+        
+        try {
+            const { error: uploadError } = await supabase.storage
+                .from('audio-uploads')
+                .upload(filePath, audioBlob);
 
-        if (currentIndex < paragraphs.length - 1) {
-            setCurrentIndex(prev => prev + 1);
-        } else {
-            onComplete(newResults);
+            if (uploadError) throw uploadError;
+
+            // Get the public URL of the uploaded file
+            const { data } = supabase.storage
+                .from('audio-uploads')
+                .getPublicUrl(filePath);
+
+            const newResult = { originalText: paragraphs[currentIndex], audioUrl: data.publicUrl };
+            const newResults = [...readingResults, newResult];
+            setReadingResults(newResults);
+
+            if (currentIndex < paragraphs.length - 1) {
+                setCurrentIndex(prev => prev + 1);
+            } else {
+                onComplete(newResults);
+            }
+        } catch (error) {
+            console.error("Error uploading audio:", error);
+            alert("Failed to save your recording. Please try again.");
+        } finally {
+            setIsUploading(false);
         }
     };
 
@@ -83,7 +107,7 @@ function ReadingStage({ paragraphs, onComplete }: { paragraphs: string[], onComp
             mediaRecorderRef.current.onstop = () => {
                 const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
                 stream.getTracks().forEach(track => track.stop());
-                handleNext(audioBlob);
+                handleUploadAndNext(audioBlob);
             };
             mediaRecorderRef.current.start();
         } catch (err) {
@@ -97,29 +121,54 @@ function ReadingStage({ paragraphs, onComplete }: { paragraphs: string[], onComp
             <CardHeader><CardTitle>Stage 1: Reading Aloud ({currentIndex + 1}/{paragraphs.length})</CardTitle><CardDescription>Click Record, read the paragraph, then click Stop.</CardDescription></CardHeader>
             <CardContent>
                 <p className="text-lg mb-8 p-6 bg-slate-100 dark:bg-slate-800 rounded-lg border">{paragraphs[currentIndex]}</p>
-                <Button onClick={isRecording ? stopRecording : startRecording} size="lg" variant={isRecording ? "destructive" : "default"}>{isRecording ? <MicOff className="mr-2" /> : <Mic className="mr-2" />}{isRecording ? 'Stop Recording' : 'Start Recording'}</Button>
+                <Button onClick={isRecording ? stopRecording : startRecording} disabled={isUploading} size="lg" variant={isRecording ? "destructive" : "default"}>
+                    {isUploading ? <LoadingSpinner className="mr-2" /> : isRecording ? <MicOff className="mr-2" /> : <Mic className="mr-2" />}
+                    {isUploading ? 'Saving...' : isRecording ? 'Stop Recording' : 'Start Recording'}
+                </Button>
                 {isRecording && <div className="text-red-500 mt-4 flex items-center justify-center animate-pulse font-semibold"><div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>Recording...</div>}
             </CardContent>
         </Card>
     );
 }
 
-function RepetitionStage({ tasks, onComplete }: { tasks: any[], onComplete: (data: AudioResult[]) => void }) {
+function RepetitionStage({ tasks, onComplete, user }: { tasks: any[], onComplete: (data: AudioUploadResult[]) => void, user: User }) {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [status, setStatus] = useState<"idle" | "playing" | "ready_to_record" | "recording">("idle");
-    const [repetitionResults, setRepetitionResults] = useState<AudioResult[]>([]);
+    const [isUploading, setIsUploading] = useState(false);
+    const [repetitionResults, setRepetitionResults] = useState<AudioUploadResult[]>([]);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const supabase = createClientComponentClient();
 
-    const handleNext = (audioBlob: Blob) => {
-        const newResult = { originalText: tasks[currentIndex].text, audioBlob };
-        const newResults = [...repetitionResults, newResult];
-        setRepetitionResults(newResults);
+    const handleUploadAndNext = async (audioBlob: Blob) => {
+        setIsUploading(true);
+        const filePath = `${user.id}/repetition_${Date.now()}.webm`;
 
-        if (currentIndex < tasks.length - 1) {
-            setCurrentIndex(prev => prev + 1);
-            setStatus("idle");
-        } else {
-            onComplete(newResults);
+        try {
+            const { error: uploadError } = await supabase.storage
+                .from('audio-uploads')
+                .upload(filePath, audioBlob);
+            
+            if (uploadError) throw uploadError;
+
+            const { data } = supabase.storage
+                .from('audio-uploads')
+                .getPublicUrl(filePath);
+
+            const newResult = { originalText: tasks[currentIndex].text, audioUrl: data.publicUrl };
+            const newResults = [...repetitionResults, newResult];
+            setRepetitionResults(newResults);
+
+            if (currentIndex < tasks.length - 1) {
+                setCurrentIndex(prev => prev + 1);
+                setStatus("idle");
+            } else {
+                onComplete(newResults);
+            }
+        } catch (error) {
+            console.error("Error uploading audio:", error);
+            alert("Failed to save your recording. Please try again.");
+        } finally {
+            setIsUploading(false);
         }
     };
 
@@ -140,7 +189,7 @@ function RepetitionStage({ tasks, onComplete }: { tasks: any[], onComplete: (dat
             mediaRecorderRef.current.onstop = () => {
                 const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
                 stream.getTracks().forEach(track => track.stop());
-                handleNext(audioBlob);
+                handleUploadAndNext(audioBlob);
             };
             mediaRecorderRef.current.start();
         } catch (err) {
@@ -159,10 +208,11 @@ function RepetitionStage({ tasks, onComplete }: { tasks: any[], onComplete: (dat
         <Card className="max-w-3xl mx-auto text-center shadow-xl">
             <CardHeader><CardTitle>Stage 2: Listen & Repeat ({currentIndex + 1}/{tasks.length})</CardTitle><CardDescription>Listen to the phrase, then record your repetition.</CardDescription></CardHeader>
             <CardContent className="min-h-[150px] flex flex-col justify-center items-center">
-                {status === "idle" && <Button size="lg" onClick={handleListen}><Volume2 className="mr-2" /> Listen</Button>}
+                {status === "idle" && <Button size="lg" onClick={handleListen} disabled={isUploading}><Volume2 className="mr-2" /> Listen</Button>}
                 {status === "playing" && <p className="text-blue-500 font-semibold animate-pulse">🔊 Playing audio...</p>}
-                {status === "ready_to_record" && <Button size="lg" onClick={startRecording}><Mic className="mr-2" /> Record Now</Button>}
+                {status === "ready_to_record" && <Button size="lg" onClick={startRecording} disabled={isUploading}><Mic className="mr-2" /> Record Now</Button>}
                 {status === "recording" && (<div className="flex flex-col items-center"><p className="text-red-500 font-semibold animate-pulse mb-4">🔴 Recording...</p><Button size="lg" variant="destructive" onClick={stopRecording}><MicOff className="mr-2" /> Stop Recording</Button></div>)}
+                {isUploading && <div className="flex items-center mt-4"><LoadingSpinner /><p className="ml-2">Saving...</p></div>}
             </CardContent>
         </Card>
     );
@@ -252,7 +302,7 @@ function ResultsDisplayStage({ analysis, onComplete }: { analysis: any, onComple
 
 // --- Main Page Component ---
 export default function CommunicationPracticePage() {
-    const [results, setResults] = useState<{ reading: AudioResult[], repetition: AudioResult[], comprehension: ComprehensionResult[] }>({ reading: [], repetition: [], comprehension: [] });
+    const [results, setResults] = useState<{ reading: AudioUploadResult[], repetition: AudioUploadResult[], comprehension: ComprehensionResult[] }>({ reading: [], repetition: [], comprehension: [] });
     const [stage, setStage] = useState<"ready" | "loading" | "reading" | "repetition" | "comprehension" | "finished" | "summary">("ready");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [practiceSet, setPracticeSet] = useState<any>(null);
@@ -296,36 +346,17 @@ export default function CommunicationPracticePage() {
         if (stageName === "comprehension") setStage("finished");
     };
 
-    const blobToBase64 = (blob: Blob): Promise<string> => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(blob);
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = error => reject(error);
-        });
-    };
-
     const handleSubmitForAnalysis = async () => {
         if (isSubmitting || !user) return;
         setIsSubmitting(true);
 
+        const finalPayload = {
+            readingResults: results.reading,
+            repetitionResults: results.repetition,
+            comprehensionResults: results.comprehension,
+        };
+
         try {
-            const readingPayload = await Promise.all(results.reading.map(async r => ({
-                originalText: r.originalText,
-                audioBase64: await blobToBase64(r.audioBlob)
-            })));
-
-            const repetitionPayload = await Promise.all(results.repetition.map(async r => ({
-                originalText: r.originalText,
-                audioBase64: await blobToBase64(r.audioBlob)
-            })));
-
-            const finalPayload = {
-                readingResults: readingPayload,
-                repetitionResults: repetitionPayload,
-                comprehensionResults: results.comprehension,
-            };
-
             const response = await fetch('/api/analyze', { 
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -357,15 +388,10 @@ export default function CommunicationPracticePage() {
     
     const handleStartSession = async () => {
         try {
-            // 1. Ask for microphone permission first
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            // Stop the tracks immediately, we just needed to get permission
             stream.getTracks().forEach(track => track.stop());
-
-            // 2. If permission is granted, then go fullscreen
             await document.documentElement.requestFullscreen();
             setStage("loading");
-
         } catch (err) {
             console.error("Failed to get permissions or enter fullscreen:", err);
             alert("Microphone access is required to start the session. Please allow access and try again.");
@@ -402,8 +428,8 @@ export default function CommunicationPracticePage() {
                         </Card>
                     </div>
                 )}
-                {stage === "reading" && practiceSet && <ReadingStage paragraphs={practiceSet.reading} onComplete={(data) => handleStageComplete("reading", data)} />}
-                {stage === "repetition" && practiceSet && <RepetitionStage tasks={practiceSet.repetition} onComplete={(data) => handleStageComplete("repetition", data)} />}
+                {stage === "reading" && practiceSet && <ReadingStage paragraphs={practiceSet.reading} onComplete={(data) => handleStageComplete("reading", data)} user={user} />}
+                {stage === "repetition" && practiceSet && <RepetitionStage tasks={practiceSet.repetition} onComplete={(data) => handleStageComplete("repetition", data)} user={user} />}
                 {stage === "comprehension" && practiceSet && <ComprehensionStage stories={practiceSet.comprehension} onComplete={(data) => handleStageComplete("comprehension", data)} />}
                 
                 {stage === 'finished' && <SubmitStage onSubmit={handleSubmitForAnalysis} isSubmitting={isSubmitting} />}
