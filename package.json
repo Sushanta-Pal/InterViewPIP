@@ -28,6 +28,7 @@
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.12",
     "googleapis": "^155.0.1",
+    "groq-sdk": "^0.30.0",
     "lucide-react": "^0.395.0",
     "next": "14.2.4",
     "next-themes": "^0.3.0",

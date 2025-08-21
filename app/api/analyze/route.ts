@@ -2,7 +2,7 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from 'groq-sdk'; // Import the Groq SDK
 import { createClient } from "@deepgram/sdk";
 
 // --- Deepgram Helper to Transcribe from a URL ---
@@ -30,47 +30,59 @@ async function transcribeAudioFromUrl(audioUrl: string): Promise<string> {
         return transcript;
     } catch (transcriptionError) {
         console.error("Caught error during transcription:", transcriptionError);
-        return "[TRANSCRIPTION FAILED]"; // Return a specific error string
+        return "[TRANSCRIPTION FAILED]";
     }
 }
 
-// --- NEW: Gemini Helper to analyze a SINGLE task ---
-async function analyzeSingleTask(originalText: string, transcribedText: string) {
-    if (!process.env.GEMINI_API_KEY) {
-        throw new Error("Gemini API key not configured.");
+// --- NEW: Groq Analysis Helper ---
+async function analyzePerformanceWithGroq(readingResults: any[], repetitionResults: any[]) {
+    if (!process.env.GROQ_API_KEY) {
+        throw new Error("Groq API key not configured.");
     }
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
+    let combinedTextForAnalysis = "Analyze the following speech performance from a user. The user completed a 'Reading' section and a 'Repetition' section.\n\n";
+    combinedTextForAnalysis += "== Reading Section Tasks ==\n";
+    readingResults.forEach((item, i) => {
+        combinedTextForAnalysis += `Task ${i+1} (Original Text): "${item.originalText}"\n`;
+        combinedTextForAnalysis += `Task ${i+1} (User's Speech): "${item.transcribedText}"\n\n`;
+    });
+    combinedTextForAnalysis += "== Repetition Section Tasks ==\n";
+    repetitionResults.forEach((item, i) => {
+        combinedTextForAnalysis += `Task ${i+1} (Original Text): "${item.originalText}"\n`;
+        combinedTextForAnalysis += `Task ${i+1} (User's Speech): "${item.transcribedText}"\n\n`;
+    });
+    
     const prompt = `
-        You are an expert linguistic analyst. Your task is to compare an "Original Text" with a "User's Speech" transcript and provide a detailed, objective analysis.
+        You are an expert, encouraging communication coach named 'Sensei'. Your task is to analyze the user's entire speech performance provided below.
 
-        Original Text: "${originalText}"
-        User's Speech: "${transcribedText}"
+        First, for the "Reading" section and the "Repetition" section, calculate an overall score from 0-100 for each. The score should be an average based on the user's accuracy, fluency, and completeness across all tasks in that section.
 
-        Your analysis must be based on the following criteria:
-        1.  **Word Count Comparison**: Count the number of words in the Original Text and the User's Speech.
-        2.  **Error Analysis**: Identify the number of insertions (extra words), deletions (missed words), and substitutions (mispronounced words).
-        3.  **Scoring**:
-            - **Accuracy Score (0-100):** Calculate this based on the number of correct words divided by the total words in the original text, accounting for errors.
-            - **Fluency Score (0-100):** Infer this from the transcript. If it's a perfect match, fluency is 100. If it's disjointed or has many errors, lower the score.
-            - **Completeness Score (0-100):** Calculate this based on the number of words the user spoke divided by the number of words in the original text.
+        CRITICAL RULE: If the user's speech for ALL tasks in a section is "[NO SPEECH DETECTED]" or "[TRANSCRIPTION FAILED]", the score for that entire section MUST be 0.
 
-        CRITICAL RULE:
-        - If the User's Speech is "[NO SPEECH DETECTED]" or "[TRANSCRIPTION FAILED]", all three scores (Accuracy, Fluency, Completeness) MUST be 0.
+        Second, after calculating the scores, generate a concise, positive, and actionable "reportText" (3-4 sentences). Start with a positive observation about their performance, then offer one specific tip for improvement.
 
         You MUST return ONLY a valid JSON object. Do not include any other text, markdown formatting, or explanations. The JSON structure must be:
         {
-          "accuracy": number,
-          "fluency": number,
-          "completeness": number
+          "scores": {
+            "reading": number,
+            "repetition": number
+          },
+          "reportText": "string"
         }
+
+        Here is the complete performance data to analyze:
+        ${combinedTextForAnalysis}
     `;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-    const jsonString = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    const chatCompletion = await groq.chat.completions.create({
+        messages: [{ role: "user", content: prompt }],
+        model: "llama3-8b-8192", // Using a fast and capable Llama 3 model
+        temperature: 0.2,
+        response_format: { type: "json_object" }, // Enforce JSON output
+    });
+
+    const jsonString = chatCompletion.choices[0]?.message?.content || "{}";
     return JSON.parse(jsonString);
 }
 
@@ -90,7 +102,7 @@ export async function POST(req: Request) {
             readingResults.map(async (r: any) => ({
                 originalText: r.originalText,
                 transcribedText: await transcribeAudioFromUrl(r.audioUrl),
-                audioUrl: r.audioUrl // Keep the URL for deletion
+                audioUrl: r.audioUrl
             }))
         );
 
@@ -98,59 +110,19 @@ export async function POST(req: Request) {
             repetitionResults.map(async (r: any) => ({
                 originalText: r.originalText,
                 transcribedText: await transcribeAudioFromUrl(r.audioUrl),
-                audioUrl: r.audioUrl // Keep the URL for deletion
+                audioUrl: r.audioUrl
             }))
         );
 
-        // Analyze each task individually for a more accurate score
-        const readingAnalyses = await Promise.all(
-            readingTranscripts.map(t => analyzeSingleTask(t.originalText, t.transcribedText))
-        );
-        const repetitionAnalyses = await Promise.all(
-            repetitionTranscripts.map(t => analyzeSingleTask(t.originalText, t.transcribedText))
-        );
-
-        // Aggregate the scores from individual analyses
-        const aggregateScores = (analyses: any[]) => {
-            if (analyses.length === 0) return { accuracy: 0, fluency: 0, completeness: 0 };
-            const total = analyses.reduce((acc, curr) => ({
-                accuracy: acc.accuracy + curr.accuracy,
-                fluency: acc.fluency + curr.fluency,
-                completeness: acc.completeness + curr.completeness,
-            }), { accuracy: 0, fluency: 0, completeness: 0 });
-            return {
-                accuracy: total.accuracy / analyses.length,
-                fluency: total.fluency / analyses.length,
-                completeness: total.completeness / analyses.length,
-            };
-        };
-
-        const readingMetrics = aggregateScores(readingAnalyses);
-        const repetitionMetrics = aggregateScores(repetitionAnalyses);
+        // Use the new Groq analysis function
+        const groqAnalysis = await analyzePerformanceWithGroq(readingTranscripts, repetitionTranscripts);
         
-        // Calculate a more nuanced final score for each section
-        const readingScore = (readingMetrics.accuracy * 0.5) + (readingMetrics.fluency * 0.3) + (readingMetrics.completeness * 0.2);
-        const repetitionScore = (repetitionMetrics.accuracy * 0.5) + (repetitionMetrics.fluency * 0.3) + (repetitionMetrics.completeness * 0.2);
-
+        const readingScore = groqAnalysis.scores.reading;
+        const repetitionScore = groqAnalysis.scores.repetition;
         const correctComprehension = comprehensionResults.filter((r: any) => r.isCorrect).length;
         const comprehensionScore = comprehensionResults.length > 0 ? (correctComprehension / comprehensionResults.length) * 100 : 0;
         
         const overallScore = (readingScore + repetitionScore + comprehensionScore) / 3;
-
-        // Generate a final summary report with Gemini
-        const finalReportPrompt = `
-            Based on the following performance scores, generate a concise, positive, and actionable "reportText" (3-4 sentences).
-            Reading Score: ${Math.round(readingScore)}/100
-            Repetition Score: ${Math.round(repetitionScore)}/100
-            Comprehension Score: ${Math.round(comprehensionScore)}/100
-            Start with a positive observation, then offer one specific tip for improvement.
-            Return ONLY the string for the reportText.
-        `;
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
-        const reportResult = await model.generateContent(finalReportPrompt);
-        const reportResponse = await reportResult.response;
-        const reportText = reportResponse.text();
 
         const newSessionId = uuidv4();
         const newSession = {
@@ -165,8 +137,7 @@ export async function POST(req: Request) {
                     repetition: Math.round(repetitionScore),
                     comprehension: Math.round(comprehensionScore),
                 },
-                reportText: reportText,
-                detailedScores: { reading: readingMetrics, repetition: repetitionMetrics }
+                reportText: groqAnalysis.reportText,
             },
         };
 
@@ -198,7 +169,10 @@ export async function POST(req: Request) {
         // After successful analysis and DB update, delete the audio files
         const readingPaths = readingTranscripts.map((r: any) => r.audioUrl.substring(r.audioUrl.lastIndexOf(user.id)));
         const repetitionPaths = repetitionTranscripts.map((r: any) => r.audioUrl.substring(r.audioUrl.lastIndexOf(user.id)));
-        await supabase.storage.from('audio-uploads').remove([...readingPaths, ...repetitionPaths]);
+        
+        if (readingPaths.length > 0 || repetitionPaths.length > 0) {
+            await supabase.storage.from('audio-uploads').remove([...readingPaths, ...repetitionPaths]);
+        }
 
         return NextResponse.json({ sessionId: newSessionId, analysis: newSession.feedback });
 
