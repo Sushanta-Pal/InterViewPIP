@@ -7,30 +7,39 @@ import { Button } from "@/components/common/Button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/common/Card";
 import { Input } from "@/components/common/Input";
 import { Label } from "@/components/common/Label";
+import LoadingSpinner from "@/components/common/LoadingSpinner"; // Assuming you have a spinner
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false); // Add loading state
   const router = useRouter();
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
+    setIsLoading(true); // Disable button
 
-    const response = await fetch('/api/auth/sign-in', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-    });
+    try {
+        const response = await fetch('/api/auth/sign-in', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+        });
 
-    const data = await response.json();
+        const data = await response.json();
 
-    if (response.ok) {
-      router.push("/dashboard");
-      router.refresh(); 
-    } else {
-      setError(data.error);
+        if (response.ok) {
+            router.push("/dashboard");
+            router.refresh(); 
+        } else {
+            setError(data.error);
+        }
+    } catch (err) {
+        setError("A network error occurred. Please try again.");
+    } finally {
+        setIsLoading(false); // Re-enable button
     }
   };
 
@@ -52,6 +61,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
               </div>
               <div>
@@ -62,11 +72,12 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
               </div>
               {error && <p className="text-red-500 text-sm">{error}</p>}
-              <Button type="submit" className="w-full">
-                Sign In
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? <LoadingSpinner className="h-5 w-5" /> : 'Sign In'}
               </Button>
             </div>
           </form>
